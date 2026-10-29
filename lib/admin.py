@@ -142,7 +142,9 @@ def doctor(args):
     check(has_hook(load_json(root / ".claude" / "settings.json"), "SessionStart", SESSION_START),
           "SessionStart hook in the hub", f"theflow init {root}")
     claude_md = root / "CLAUDE.md"
-    check(claude_md.exists() and f"@{FLOW}/HUB.md" in claude_md.read_text(), "CLAUDE.md imports theflow's HUB.md",
+    imports = {f"@{FLOW}/HUB.md"} | ({f"@~/{FLOW.relative_to(Path.home())}/HUB.md"}
+                                      if FLOW.is_relative_to(Path.home()) else set())
+    check(claude_md.exists() and any(i in claude_md.read_text() for i in imports), "CLAUDE.md imports theflow's HUB.md",
           f"add the line @{FLOW}/HUB.md")
     check(hub.herdr_running(), f"herdr server running{' (session ' + hub.config['herdr_session'] + ')' if hub.config['herdr_session'] else ''}",
           "theflow open")
