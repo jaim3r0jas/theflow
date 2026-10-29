@@ -222,7 +222,8 @@ yours), keep what is decided under `## Notes` in that note.
 `work-on` creates code items with plain `git worktree add` (a new branch from the base's default, or an existing
 PR's branch), writes the note, and runs `theflow sync --start <base>/<ITEM-ID>`, which opens the workspace (with the
 base's `build_panes` and `worktree_links`), trusts the folder for Claude, and starts Claude there as the item's
-agent with Remote Control on. If a worktree for the item already exists, it resumes it instead.
+agent with Remote Control on, its session named `work:<short name>` (`talk:` for a talk item). If a worktree for
+the item already exists, it resumes it instead.
 
 An item lives until its work is **merged** (or the question answered), then it **must** be wrapped up with the
 `wrap-up` skill (`/wrap-up <item>`, or `/wrap-up <item> cancel` for abandoned work), from the hub or, as `/wrap-up`
@@ -258,6 +259,11 @@ must be unique among active items: for a multi-base item, add the base to all bu
 `export-csv-web`). Labels are display only: workspaces are found by path, never by label. `theflow sync` puts every
 name above back on each run; a tab the user named keeps its name.
 
+An item's Claude **session** carries the name of its tab or pane, `work:<short name>` or `talk:<short name>`, in
+Claude's prompt box, `/resume` and the Remote Control list: `theflow sync` passes `--name` when it starts or resumes
+it, and sends `/rename` to a running one with another name (no model turn, only while its agent is idle). A name
+the user gave the session (one without a `work:`, `talk:` or `hub:` prefix) is kept. Hub sessions keep `hub:<slug>`.
+
 - `theflow open` starts or attaches herdr (the hub's `herdr_session`), then runs `theflow sync` (with `--resume`
   when it had to start the server, so every item's Claude comes back after a reboot).
 - `theflow sync` creates what is missing (the hub workspace, one per base, one per worktree), keeps the names, writes
@@ -273,8 +279,9 @@ name above back on each run; a tab the user named keeps its name.
 
 - The hub targets agents only by name (`herdr agent get|focus|prompt|read|wait <name>`), never by focus or pane
   order. Names drop when Claude exits; `theflow sync` puts them back.
-- The hub prompts an item's agent for exactly two things: the kickoff (`work-on`) and the outcome summary (`wrap-up`
-  from the hub). It never sends work instructions, never answers an agent's approval, question or startup dialog for
+- The hub prompts an item's agent for two things, the kickoff (`work-on`) and the outcome summary (`wrap-up` from
+  the hub), and `theflow sync` sends it one command, `/rename <session name>`, when it is idle and its session lacks
+  its item's name. It never sends work instructions, never answers an agent's approval, question or startup dialog for
   the user, and never closes a tab, pane or workspace it didn't create, except through `wrap-up`.
 - An item's closing reaches the session that opened it as one FYI prompt, only when that session is alive and idle.
   The hub acknowledges it in one line and does nothing else; the durable record is `items/inbox.md`.

@@ -156,6 +156,20 @@ class Hub:
     def has_transcript(self, sid):
         return any(self.transcripts.glob(f"*/{sid}.jsonl"))
 
+    def session_title(self, sid):
+        """The name a Claude session carries (`--name`, `/rename` or a hook's sessionTitle): the last one in its newest
+        transcript."""
+        for f in sorted(self.transcripts.glob(f"*/{sid}.jsonl"), key=lambda f: f.stat().st_mtime, reverse=True):
+            data = f.read_bytes()
+            at = data.rfind(b'"type":"custom-title"')
+            if at >= 0:
+                start, end = data.rfind(b"\n", 0, at) + 1, data.find(b"\n", at)
+                try:
+                    return json.loads(data[start:end if end >= 0 else None]).get("customTitle")
+                except ValueError:
+                    return None
+        return None
+
     def last_transcript(self, path):
         """The id of the newest Claude conversation started in path, if any."""
         found = sorted((self.transcripts / re.sub(r"[^A-Za-z0-9]", "-", str(path))).glob("*.jsonl"),

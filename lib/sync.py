@@ -13,8 +13,11 @@ Names (kept on every run, so a workspace closed and opened again gets them back;
   in a pane of its own titled talk:<short name> (flow.json "talk": "tab": a tab of that name).
 - The Claude agent of every item is named after its short name (kept in the note as agent), and its session id is
   recorded in the note as claude_session. A note with `mcp: <name>[,<name>...]` starts that Claude with
-  `--mcp-config mcp/<name>.json` for each name. Every item's Claude starts with Remote Control on, its session
-  named after the agent, in a folder trusted ahead of time.
+  `--mcp-config mcp/<name>.json` for each name. Every item's Claude starts with Remote Control on, in a folder
+  trusted ahead of time. Its session is named like its herdr tab or pane, work:<short name> or talk:<short name>
+  (Claude's prompt box, /resume and Remote Control): `--name` when theflow starts or resumes it, and a running one
+  with another name gets `/rename` while its agent is idle. A name the user gave the session (one without a
+  work:, talk: or hub: prefix) is kept.
 Workspaces are matched by path, never by label. Nothing is ever closed, so this is safe to re-run.
 
   --resume            also start Claude (`--resume <id>`) for every item that has no agent but whose note records
@@ -269,8 +272,9 @@ class Sync:
             main_tab = (agent or {}).get("tab_id") or next(
                 (t["tab_id"] for t in self.tabs if t["workspace_id"] == tree_ws), None)
             tab_label = next((t.get("label") for t in self.tabs if t["tab_id"] == main_tab), None)
+            title = f"{self.p['work']}{label}"   # the main tab's name, and the session's
             if main_tab and (is_default_tab(tab_label) or tab_label.startswith(self.p["work"])):
-                self.name_tab(main_tab, f"{self.p['work']}{label}")
+                self.name_tab(main_tab, title)
             if self.status:
                 if agent:
                     self.item_row(agent["agent_status"], label, agent.get("name") or f"{name} (unnamed)", idle, meta)
@@ -283,11 +287,11 @@ class Sync:
             # (the workspace's own pane comes before any build panes split off it).
             free = next((p for p in in_tree if not p.get("agent") and p.get("cwd") == str(path)), None)
             if agent:
-                self.adopt(agent, name, note, meta)
+                self.adopt(agent, name, note, meta, title)
                 if wanted:
                     print(f"=   {name} is already running")
             elif free and (wanted or (self.resume and meta.get("claude_session"))):
-                self.start_claude(free["pane_id"], name, note, meta)
+                self.start_claude(free["pane_id"], name, note, meta, title)
             elif wanted:
                 print(f"!   no free pane at {path} to start {name} in")
             elif meta.get("claude_session"):
@@ -364,7 +368,7 @@ class Sync:
             self.say(f"=   {label:<22} talk, pane {agent['pane_id'] if agent else '-'}")
             wanted = self.start == f"{base}/{item}"
             if agent:
-                self.adopt(agent, name, note, meta)
+                self.adopt(agent, name, note, meta, title)
                 own_tab = [t for t in self.tabs if t["workspace_id"] == agent["workspace_id"]][:1] != \
                     [t for t in self.tabs if t["tab_id"] == agent["tab_id"]]   # not its workspace's first tab
                 if self.hub.config["talk"] == "tab" and own_tab:
@@ -378,7 +382,7 @@ class Sync:
             elif wanted or (self.resume and sid):
                 pane = self.talk_pane(ws, path, title)
                 if pane:
-                    self.start_claude(pane, name, note, meta)
+                    self.start_claude(pane, name, note, meta, title)
             elif sid:
                 print(f"    resume with: theflow sync --start {base}/{item}")
 
@@ -413,18 +417,35 @@ class Sync:
 
     # ---- agents ------------------------------------------------------------------------------------------------
 
-    def adopt(self, pane, name, note, meta):
-        """Name the item's Claude agent and record its session id in the note."""
-        if pane.get("name") != name:
+    def session_name(self, current, title):
+        """The name the item's Claude session should carry: its herdr title (work:/talk:<short name>), unless the
+        user gave the session a name of their own (current, one without theflow's prefixes), which stays."""
+        ours = (self.p["work"], self.p["talk"], self.p["hub"])
+        return current if current and not current.startswith(ours) else title
+
+    def adopt(self, pane, name, note, meta, title):
+        """Name the item's Claude agent, record its session id in the note, and give the session the item's name:
+        `/rename` (no model turn), only while the agent is idle so it never lands in the middle of its work."""
+        named = pane.get("name") == name
+        if not named:
             _, err = self.hub.herdr_try("agent", "rename", pane["pane_id"], name)
             print(f"!   could not name agent {name}: {err}" if err else f"    named agent {name}")
+            named = not err
         sid = (pane.get("agent_session") or {}).get("value")
         if sid and sid != meta.get("claude_session"):
             set_note_field(note, "claude_session", sid)
             meta["claude_session"] = sid
             print(f"    recorded claude_session {sid}")
+        current = self.hub.session_title(sid) if sid else None
+        if not sid or not named or current == self.session_name(current, title):   # /rename goes to the agent's name
+            return
+        if pane.get("agent_status") not in ("idle", "done"):
+            print(f"    session not named {title} yet: {name} is {pane.get('agent_status')}, the next sync does it")
+            return
+        _, err = self.hub.herdr_try("agent", "prompt", name, f"/rename {title}")
+        print(f"!   could not name {name}'s session {title}: {err}" if err else f"    named {name}'s session {title}")
 
-    def start_claude(self, pane_id, name, note, meta):
+    def start_claude(self, pane_id, name, note, meta, title):
         sid = meta.get("claude_session")
         if not sid:
             sid = str(uuid.uuid4())
@@ -440,7 +461,8 @@ class Sync:
         trusted = self.hub.trust(cwd) if cwd else None
         if trusted:
             print(f"    trusted {trusted} for Claude")
-        extra = ["--remote-control", name]
+        title = self.session_name(self.hub.session_title(sid), title)   # --name renames a resumed session too
+        extra = ["--name", title, "--remote-control", title]
         for server in filter(None, (s.strip() for s in meta.get("mcp", "").split(","))):
             config = self.hub.mcp / f"{server}.json"
             if config.exists():
@@ -454,7 +476,7 @@ class Sync:
         elif err:
             print(f"!   could not start {name}: {err}")
         else:
-            print(f"    started {name} (claude {flag} {sid}, remote control on)")
+            print(f"    started {name} (claude {flag} {sid}, session {title}, remote control on)")
 
     def orphans(self, base_label, base_ws):
         """Claude agents in a base's workspaces that no item claims, with what adopting them needs."""

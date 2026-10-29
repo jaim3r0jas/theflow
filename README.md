@@ -24,7 +24,8 @@ base:web
   `/review <PR>` (a draft review you audit, then post), `/wrap-up <item> [cancel]` (warns about unmerged or
   uncommitted work first, then removes everything the item created).
 - **`theflow`**, a small CLI the skills use: mirrors the hub into herdr, keeps names consistent, starts and resumes
-  each item's Claude (with Remote Control on), inventories and tears items down, checks `gh`.
+  each item's Claude (with Remote Control on, its session named after the item), inventories and tears items down,
+  checks `gh`.
 - **Guard rails**: bases the hub owns are read-only (a PreToolUse hook blocks edits and branch changes there), every
   item has a note with its plan and outcome, a WIP limit and idle flags keep the number of open streams honest,
   closings are logged to an inbox and sent back to the session that opened the item.
@@ -117,7 +118,8 @@ theflow init ~/Personal/hub --name personal-hub --herdr-session personal --claud
 ```
 
 `theflow open` in a hub starts its herdr session with `CLAUDE_CONFIG_DIR` set for every pane (and, with
-`remote_control_prefix`, a Remote Control name prefix for unnamed sessions). Run `theflow install` in each hub: the
+`remote_control_prefix`, a Remote Control name prefix for unnamed sessions, such as the hub's own; an item's session
+is named `work:<short name>` or `talk:<short name>`). Run `theflow install` in each hub: the
 skills and the guard go into that hub's Claude home.
 
 ## Per-hub extras

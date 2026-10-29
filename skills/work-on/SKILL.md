@@ -163,7 +163,8 @@ Inside herdr, open the workspace and start Claude in it:
 ```bash
 theflow sync --start <base>/<ITEM-ID>   # opens the worktree workspace under its base with the note's label and the
                                         # base's build_panes, trusts the folder for Claude, gives the note a fresh
-                                        # claude_session and starts Claude there as <agent>, Remote Control on
+                                        # claude_session and starts Claude there as <agent>, Remote Control on,
+                                        # its session named work:<label> (talk:<label> for a talk item)
 ```
 
 **Send the kickoff** once it printed `started <agent>`. Write the kickoff prompt to a file in the scratchpad first
