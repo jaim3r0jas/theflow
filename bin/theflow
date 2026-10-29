@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+# theflow: a hub of AI agent sessions in herdr, one session per piece of work. See README.md.
+set -euo pipefail
+SELF=$0; while [ -L "$SELF" ]; do L=$(readlink "$SELF"); case $L in /*) SELF=$L ;; *) SELF=$(dirname "$SELF")/$L ;; esac; done
+LIB=$(cd "$(dirname "$SELF")/../lib" && pwd -P)
+
+usage() {
+  cat <<'USAGE'
+theflow <command> [args]          (run inside a hub: a folder with flow.json, or set FLOW_HUB)
+
+  init <dir> [--name N]           create a hub (bases/, work/, items/, flow.json, CLAUDE.md, hooks) and install
+  install                         link the skills and the base guard into this hub's Claude home
+  doctor                          check what the hub needs
+  open [herdr args]               start or attach the hub's herdr session, mirrored and resumed
+  sync [--start B/ID] [--resume]  mirror bases and items into herdr; start or resume an item's Claude
+  status [--mark-seen]            every item with its agent state, idle and stuck ones, closings, the WIP count
+  teardown --check|--run|--detach B/ID [opts]   inventory or remove an item (wrap-up's mechanical half)
+  scan <path> [herdr|compose|proc]               what runs from a worktree
+  gh-check [dir]                  gh installed and logged in there
+  repo <base>                     owner/repo of a base's GitHub origin
+  trust <dir>                     accept Claude's folder trust for a folder ahead of time
+  root                            the hub's folder
+  hook session-start|protect-bases              the Claude hooks
+  review-corpus <out.jsonl> [--since DATE]      your past review comments, to learn a review style
+USAGE
+}
+
+cmd=${1:-help}; [ $# -gt 0 ] && shift
+case $cmd in
+  init|install|doctor|root|env|repo|trust) exec python3 "$LIB/admin.py" "$cmd" "$@" ;;
+  open) exec "$LIB/open.sh" "$@" ;;
+  sync) exec python3 "$LIB/sync.py" "$@" ;;
+  status) exec python3 "$LIB/sync.py" --status "$@" ;;
+  teardown) exec python3 "$LIB/teardown.py" "$@" ;;
+  scan) exec python3 "$LIB/teardown.py" --scan "$@" ;;
+  gh-check) exec "$LIB/gh-check.sh" "$@" ;;
+  review-corpus) exec python3 "$LIB/review-corpus.py" "$@" ;;
+  hook)
+    case ${1:-} in
+      session-start) exec python3 "$LIB/session-start.py" ;;
+      protect-bases) exec python3 "$LIB/protect-bases.py" ;;
+      *) echo "usage: theflow hook session-start|protect-bases" >&2; exit 2 ;;
+    esac ;;
+  help|-h|--help) usage ;;
+  *) echo "theflow: unknown command $cmd" >&2; usage >&2; exit 2 ;;
+esac
