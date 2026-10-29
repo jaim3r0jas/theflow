@@ -177,8 +177,8 @@ class Sync:
 
     def duplicates(self, name, path, label, ws):
         """Other workspaces rooted at the base (a git base's main checkout, else every pane at the base): one left
-        over from an old name, or opened by hand. herdr groups the base's worktrees under one of them, and only
-        closes that one together with all of them."""
+        over from an old name, or opened by hand. herdr groups each worktree workspace under one of them and closes
+        a group parent only together with its worktree workspaces (--group)."""
         where = {str(path), str(path.resolve())}
         for w in self.workspaces:
             wid = w["workspace_id"]
@@ -191,9 +191,10 @@ class Sync:
                 self.rows.append((6, f"{'-':<8} {w.get('label') or wid:<26} another workspace at {label} ({wid}, "
                                      + (f"agents in {', '.join(agents)}: adopt or exit them first); " if agents
                                         else "nothing running); ")
-                                     + f"close it: herdr workspace close {wid} (if herdr says "
-                                       f"workspace_group_close_required, it holds the worktree group: close {ws} "
-                                       f"instead and re-run theflow sync)"))
+                                     + f"close it: herdr workspace close {wid}; if herdr says "
+                                       f"workspace_group_close_required, it holds some of the base's worktree "
+                                       f"workspaces: once their agents are idle, add --group, then theflow sync "
+                                       f"--resume brings them back"))
 
     # ---- code items --------------------------------------------------------------------------------------------
 
