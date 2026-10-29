@@ -22,7 +22,8 @@ Workspaces are matched by path, never by label. Nothing is ever closed, so this 
   --start BASE/ITEM   start Claude for that item under its agent name: a new item gets a fresh claude_session
                       (`--session-id`), one with a transcript is resumed.
   --status            change nothing; print every item with its agent state (blocked first), and Claude agents in
-                      base or worktree workspaces that no item claims (with their session id, for adopting).
+                      base or worktree workspaces that no item claims (with their session id, for adopting), and
+                      extra workspaces rooted at a base besides its base workspace (left over, safe to close).
                       Items idle for stale_days or more are flagged, so are items stuck in status: wrapping (a
                       teardown that failed). Then the closings in items/inbox.md since the last --mark-seen, and
                       the last line counts the active items against wip_limit.
@@ -72,7 +73,8 @@ class Sync:
         names = {a["pane_id"]: a.get("name") for a in h("agent", "list")["agents"]}
         for p in self.panes:
             p["name"] = names.get(p["pane_id"])
-        self.labels = {w["workspace_id"]: w.get("label") for w in h("workspace", "list")["workspaces"]}
+        self.workspaces = h("workspace", "list")["workspaces"]
+        self.labels = {w["workspace_id"]: w.get("label") for w in self.workspaces}
         self.tabs = h("tab", "list")["tabs"]
 
     def rel(self, path):
@@ -172,6 +174,26 @@ class Sync:
             print(f"+ {label:<24} {ws}")
             self.refresh()
         return ws, trees
+
+    def duplicates(self, name, path, label, ws):
+        """Other workspaces rooted at the base (a git base's main checkout, else every pane at the base): one left
+        over from an old name, or opened by hand. herdr groups the base's worktrees under one of them, and only
+        closes that one together with all of them."""
+        where = {str(path), str(path.resolve())}
+        for w in self.workspaces:
+            wid = w["workspace_id"]
+            tree = w.get("worktree") or {}
+            panes = [p for p in self.panes if p["workspace_id"] == wid]
+            rooted = tree.get("checkout_path") in where and not tree.get("is_linked_worktree") if tree \
+                else not self.hub.is_git(name) and panes and all(p.get("cwd") in where for p in panes)
+            if wid != ws and rooted:
+                agents = [p["pane_id"] for p in panes if p.get("agent")]
+                self.rows.append((6, f"{'-':<8} {w.get('label') or wid:<26} another workspace at {label} ({wid}, "
+                                     + (f"agents in {', '.join(agents)}: adopt or exit them first); " if agents
+                                        else "nothing running); ")
+                                     + f"close it: herdr workspace close {wid} (if herdr says "
+                                       f"workspace_group_close_required, it holds the worktree group: close {ws} "
+                                       f"instead and re-run theflow sync)"))
 
     # ---- code items --------------------------------------------------------------------------------------------
 
@@ -481,6 +503,7 @@ class Sync:
             self.talks(base, path, ws)
             if self.status:
                 self.orphans(label, {ws} | {t["open_workspace_id"] for t in trees if t.get("open_workspace_id")})
+                self.duplicates(base, path, label, ws)
         if self.status:
             self.stray_notes()
             for _, row in sorted(self.rows, key=lambda r: r[0]):

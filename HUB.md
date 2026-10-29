@@ -265,7 +265,8 @@ name above back on each run; a tab the user named keeps its name.
   ever closed, so it is safe to re-run. `--start <base>/<ITEM-ID>` starts an item's Claude (`--session-id` for a new
   one, `--resume` once it has a transcript); `--resume` does that for every item without an agent.
 - `theflow status` changes nothing: every item with its agent state (blocked first), agents no item claims (with
-  their session id), items stuck in `status: wrapping`, then the closings not yet shown to a hub session.
+  their session id), items stuck in `status: wrapping`, extra workspaces rooted at a base (left over: close them),
+  then the closings not yet shown to a hub session.
 - A base workspace is for looking around and for talk items. The hub workspace is for hub sessions only.
 
 ## herdr automation
