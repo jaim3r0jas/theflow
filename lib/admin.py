@@ -124,8 +124,10 @@ def doctor(args):
         print(f"{'ok ' if good else 'NO '} {text}" + ("" if good or not fix else f"  -> {fix}"))
 
     for tool, why in (("git", ""), ("herdr", "https://herdr.dev"), ("claude", "Claude Code"), ("gh", "GitHub CLI"),
-                      ("jq", ""), ("docker", "optional: teardown of compose stacks"), ("lsof", "")):
+                      ("jq", ""), ("lsof", "")):
         check(shutil.which(tool), f"{tool} on PATH", why)
+    if not shutil.which("docker"):
+        print("--  docker not on PATH (optional: only for items that start compose stacks)")
     check(sys.version_info >= (3, 9), f"python {sys.version.split()[0]} (3.9+)")
     check(shutil.which("theflow"), "theflow on PATH", "theflow install")
     root = flowlib.find_root()
