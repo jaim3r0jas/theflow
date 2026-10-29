@@ -338,7 +338,7 @@ class Sync:
                 self.adopt(agent, name, note, meta)
                 if self.hub.config["talk"] == "tab":
                     tab_label = next((t.get("label") for t in self.tabs if t["tab_id"] == agent["tab_id"]), None)
-                    if is_default_tab(tab_label) or tab_label.startswith(self.p["talk"]):
+                    if is_default_tab(tab_label) or tab_label.startswith(self.p["talk"]) or tab_label == label:
                         self.name_tab(agent["tab_id"], title)
                 else:
                     self.hub.herdr_try("pane", "rename", agent["pane_id"], title)   # herdr doesn't report it

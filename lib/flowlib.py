@@ -124,7 +124,8 @@ class Hub:
         return d.removeprefix("origin/") or "main"
 
     def base_names(self):
-        return sorted(p.name for p in self.bases.iterdir() if p.is_dir()) if self.bases.exists() else []
+        return sorted(p.name for p in self.bases.iterdir() if p.is_dir() and not p.name.startswith(".")) \
+            if self.bases.exists() else []
 
     # ---- herdr -------------------------------------------------------------------------------------------------
 
