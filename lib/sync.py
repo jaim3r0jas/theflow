@@ -234,8 +234,12 @@ class Sync:
                     self.add_build_panes(tree_ws, path, build_panes)
             in_tree = [p for p in self.panes if p["workspace_id"] == tree_ws]
             claude = [p for p in in_tree if p.get("agent") == "claude"]
-            # The item's agent: the Claude pane rooted at the worktree, else the first Claude pane in its workspace.
-            agent = next((p for p in claude if p.get("cwd") == str(path)), claude[0] if claude else None)
+            # The item's agent: the Claude pane with its name or session id, else the one rooted at the worktree, else
+            # the first Claude pane in its workspace.
+            sid = meta.get("claude_session")
+            agent = next((p for p in claude if p.get("name") == name
+                          or (sid and (p.get("agent_session") or {}).get("value") == sid)), None) \
+                or next((p for p in claude if p.get("cwd") == str(path)), claude[0] if claude else None)
             if agent:
                 self.claimed.add(agent["pane_id"])
             # Its main tab (the agent's, else the workspace's first): work:<short name>, unless the user named it.
@@ -317,10 +321,12 @@ class Sync:
             title = f"{self.p['talk']}{label}"
             if not meta.get("agent") and not self.status:
                 set_note_field(note, "agent", name)
-            # Its agent: the Claude pane in the base workspace with its name, or with its session id.
+            # Its agent: the Claude pane in the base workspace with its name, or anywhere with its session id (an
+            # adopted session stays where it was started).
             agent = next((p for p in self.panes if p["workspace_id"] == ws and p.get("agent") == "claude"
-                          and (p.get("name") == name or (sid and (p.get("agent_session") or {}).get("value") == sid))),
-                         None)
+                          and p.get("name") == name), None) or next(
+                (p for p in self.panes if sid and p.get("agent") == "claude" and p["pane_id"] not in self.claimed
+                 and (p.get("agent_session") or {}).get("value") == sid), None)
             if agent:
                 self.claimed.add(agent["pane_id"])
             if self.status:
@@ -336,11 +342,13 @@ class Sync:
             wanted = self.start == f"{base}/{item}"
             if agent:
                 self.adopt(agent, name, note, meta)
-                if self.hub.config["talk"] == "tab":
+                own_tab = [t for t in self.tabs if t["workspace_id"] == agent["workspace_id"]][:1] != \
+                    [t for t in self.tabs if t["tab_id"] == agent["tab_id"]]   # not its workspace's first tab
+                if self.hub.config["talk"] == "tab" and own_tab:
                     tab_label = next((t.get("label") for t in self.tabs if t["tab_id"] == agent["tab_id"]), None)
                     if is_default_tab(tab_label) or tab_label.startswith(self.p["talk"]) or tab_label == label:
                         self.name_tab(agent["tab_id"], title)
-                else:
+                elif self.hub.config["talk"] != "tab":
                     self.hub.herdr_try("pane", "rename", agent["pane_id"], title)   # herdr doesn't report it
                 if wanted:
                     print(f"=   {name} is already running")

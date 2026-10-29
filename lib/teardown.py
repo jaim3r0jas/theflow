@@ -372,6 +372,9 @@ class Item:
             _, err = self.hub.herdr_try("tab", "close", tab)
             (left if err else log).append(f"herdr tab {tab} not closed: {err[:120]}" if err
                                           else f"herdr tab {tab} ({tab_label}) closed")
+        elif pane and self.root_pane(pane):
+            left.append(f"agent {self.agent} runs in its workspace's own pane {pane}, which stays open: exit Claude "
+                        "there (/exit)")
         elif pane:
             _, err = self.hub.herdr_try("pane", "close", pane)
             (left if err else log).append(f"herdr pane {pane} not closed: {err[:120]}" if err
@@ -379,9 +382,15 @@ class Item:
         else:
             log.append("no agent pane was open")
         time.sleep(2)
-        if self.agent_status()[1]:
+        if self.agent_status()[1] and not left:
             left.append(f"agent {self.agent} still running")
-        return self.finish(by, opts, log, left, removed=not left)
+        return self.finish(by, opts, log, left, removed=not any(x.startswith("herdr") for x in left))
+
+    def root_pane(self, pane):
+        """Whether a pane is its workspace's first one (an adopted session's): closing it would close the workspace."""
+        panes = (self.hub.herdr_try("pane", "list")[0] or {}).get("panes", [])
+        ws = next((p["workspace_id"] for p in panes if p["pane_id"] == pane), None)
+        return next((p["pane_id"] for p in panes if p["workspace_id"] == ws), None) == pane
 
     def stop_processes(self, log, left):
         for sig in (signal.SIGTERM, signal.SIGKILL):
