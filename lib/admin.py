@@ -154,6 +154,8 @@ def doctor(args):
         kind = ("linked" if hub.is_linked(name) else "owned") + (" git" if hub.is_git(name) else " folder")
         print(f"    base {name}: {kind}, merge {hub.merge_mode(name) if hub.is_git(name) else '-'}, "
               f"{'writable' if hub.writable(name) else 'read-only'}")
+    if "talk" in hub.config:
+        print('--  flow.json "talk" is no longer read (talk items always get a tab of their own): remove it')
     sys.exit(0 if ok else 1)
 
 

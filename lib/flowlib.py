@@ -28,7 +28,6 @@ DEFAULTS = {
     "remote_control_prefix": "",   # name prefix of unnamed Remote Control sessions started under `theflow open`
     "wip_limit": 6,                # active items one person can review properly; work-on warns above it
     "stale_days": 7,               # an item untouched this long is a candidate for wrap-up (or cancel)
-    "talk": "pane",                # where a talk item's Claude runs in its base workspace: "pane" or "tab"
     "branch": {"ticket": "feat/{ticket}/{desc}", "adhoc": "feat/ad-hoc/{desc}"},
     "prefixes": {"base": "base:", "work": "work:", "talk": "talk:", "hub": "hub:"},
     "noise": [".husky/_/"],        # untracked paths that never count as pending work

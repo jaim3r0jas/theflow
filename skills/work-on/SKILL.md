@@ -1,6 +1,6 @@
 ---
 name: work-on
-description: Set up a theflow item from a hub, read as a sentence - "/work-on <what> on <base>". <what> is a ticket (if the hub uses a tracker), a GitHub PR (URL or #number), an existing item to resume, an agent to adopt, or a plain description of the work; <base> is one or more folders in the hub's bases/. Prepares the base, creates the worktree, its item note and its herdr workspace (a talk item, with no repo changes: only the note and a pane in the base's workspace), starts Claude there as <short-name> and sends it the kickoff prompt. Use at the start of every session opened in a hub root, or when the user says "work on ...", "start ...", "new item", "resume ...", "adopt ...", "what are we working on" or "new \"...\" on <base>".
+description: Set up a theflow item from a hub, read as a sentence - "/work-on <what> on <base>". <what> is a ticket (if the hub uses a tracker), a GitHub PR (URL or #number), an existing item to resume, an agent to adopt, or a plain description of the work; <base> is one or more folders in the hub's bases/. Prepares the base, creates the worktree, its item note and its herdr workspace (a talk item, with no repo changes: only the note and a tab in the base's workspace), starts Claude there as <short-name> and sends it the kickoff prompt. Use at the start of every session opened in a hub root, or when the user says "work on ...", "start ...", "new item", "resume ...", "adopt ...", "what are we working on" or "new \"...\" on <base>".
 ---
 
 # Work on an item
@@ -80,8 +80,9 @@ this hub supports and **Resume** (list the active items).
 - **Adopt**: create nothing in git. Take the pane's workspace (its base), its terminal title and its session id from
   the `no item` line of `theflow status`. Write a talk note (step 5, **Talk item**) with `claude_session: <that id>`,
   a short name from the topic, and 2–5 lines from the title and the user's words, then run `theflow sync`: it names
-  the agent and titles its pane. No kickoff: the conversation is already running. An agent in a worktree workspace
-  needs no adopting: `theflow sync` already wrote that worktree a note. Reply and stop.
+  the agent and gives it a tab of its own (out of a split, still running). No kickoff: the conversation is already
+  running. An agent in a worktree workspace needs no adopting: `theflow sync` already wrote that worktree a note.
+  Reply and stop.
 - **Ticket**: fetch it as the hub's **Tickets** section says. If the integration is not connected, ask the user to
   connect it and stop. `<ITEM-ID>` is the ticket ID; the branch is `flow.json` `branch.ticket` with `{ticket}` and
   `{desc}` (a 3 to 6 word lowercase dashed form of the title).
@@ -113,7 +114,7 @@ the likelier one first with "(Recommended)", **Code (worktree)** / **Talk (in th
 
 Pick the item's **short name** (the note's `label`): 1 to 3 lowercase words joined by dashes, at most about 20
 characters, naming the work (`retry-sync`, `dark-mode`), with no base prefix and never a ticket ID. It is the
-worktree workspace's label (main tab `work:<short name>`), a talk item's pane title (`talk:<short name>`) and the
+worktree workspace's label (main tab `work:<short name>`), a talk item's tab (`talk:<short name>`) and the
 agent's name (`agent`, the same string), so it must not match another active item's; for a multi-base item, add the
 base to all but one (`export-csv`, `export-csv-web`).
 
@@ -121,7 +122,7 @@ Then state the plan in one line and go on unless the user objects:
 
 ```
 ABC-123 on api → work/api/ABC-123, branch feat/ABC-123/retry-sync (from origin/main), herdr retry-sync, agent retry-sync
-budget question on notes → talk: a pane talk:budget-q in base:notes (cwd bases/notes, writable), agent budget-q
+budget question on notes → talk: a tab talk:budget-q in base:notes (cwd bases/notes, writable), agent budget-q
 ```
 
 Over the WIP limit (step 1), add: `That makes 8 active items (limit 6). Idle a week or more: docs-fix (/wrap-up
@@ -183,15 +184,15 @@ then `herdr agent wait <agent> --until idle --until done --timeout 300000` and s
 1. `theflow gh-check bases/<base>` (a base on GitHub).
 2. Write the note as above, with `kind: talk` and without `branch`; the body's last line is an empty `## Notes`
    section for what the session decides.
-3. `theflow sync --start <base>/<ITEM-ID>`: it opens a pane (or a tab, `"talk": "tab"`) in the base's workspace,
-   rooted at the base, and starts Claude there as `<agent>`.
+3. `theflow sync --start <base>/<ITEM-ID>`: it opens a tab of its own in the base's workspace, rooted at the base,
+   and starts Claude there as `<agent>`.
 4. Send the kickoff as above, in the talk form of **Kickoff prompt** in the hub rules.
 
 ## 6. Hand over and stop
 
 Do not start the actual work in this session. Reply with:
 
-- the worktree path(s), or for a talk item: "talk, pane `<id>` (`talk:<short name>`) in the `base:<base>` workspace",
+- the worktree path(s), or for a talk item: "talk, tab `<id>` (`talk:<short name>`) in the `base:<base>` workspace",
 - the branch name(s) and what they were cut from,
 - the herdr workspace label(s) and the note path(s),
 - the ticket or PR as a markdown link, if there is one,

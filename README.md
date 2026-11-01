@@ -11,7 +11,7 @@ the worktree, the branches) and reports back to the hub.
 
 ```
 work-hub                     ← you talk to Claude here: /work-on, /review, /wrap-up
-base:api                     ← one workspace per repo (base); talk items run as panes here
+base:api                     ← one workspace per repo (base); talk items run as tabs here
   retry-sync                 ← one workspace per code item: its own worktree, branch and Claude
   rv-retry-limit                ← a review item: a PR checked out detached, a draft review in your voice
 base:web
@@ -37,7 +37,7 @@ base:web
 | **hub** | a folder with `flow.json`, `bases/`, `work/`, `items/` and a `CLAUDE.md` that imports [HUB.md](HUB.md) |
 | **base** | a repo or folder the work happens in: a git clone the hub owns (`bases/api`, read-only, reset to origin before each item), or a symlink to a folder of yours (`bases/notes -> ~/notes`, never reset, writable; without git it takes talk items only) |
 | **code item** | a git worktree `work/<base>/<ID>` on its own branch, its own herdr workspace and Claude session; lands as a GitHub PR, or (`merge: local`) fast-forwarded into the base's checkout on wrap-up |
-| **talk item** | no worktree: investigating, planning, triage, work in other tools. Its Claude runs in the base's workspace (a pane, or a tab) |
+| **talk item** | no worktree: investigating, planning, triage, work in other tools. Its Claude runs in a tab of its own in the base's workspace |
 | **review item** | a GitHub PR checked out detached; its Claude drafts a review in your voice, you edit, it posts on "post" |
 | **note** | `items/<base>/<ID>.md`: what the item is, its plan, its outcome. A registry, not a memory: facts belong in the project |
 
@@ -92,7 +92,6 @@ theflow review-corpus <out.jsonl>          your past review comments, to learn y
   "remote_control_prefix": "",
   "wip_limit": 6,
   "stale_days": 7,
-  "talk": "pane",
   "branch": {"ticket": "feat/{ticket}/{desc}", "adhoc": "feat/ad-hoc/{desc}"},
   "prefixes": {"base": "base:", "work": "work:", "talk": "talk:", "hub": "hub:"},
   "noise": [".husky/_/"],

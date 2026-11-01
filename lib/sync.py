@@ -10,11 +10,12 @@ Names (kept on every run, so a workspace closed and opened again gets them back;
   build_panes, each running its command, and every run links the base's worktree_links into it.
 - Every item has a note, items/<base>/<ITEM-ID>.md. A worktree without one gets a minimal note here.
 - A talk item (note with `kind: talk`) has no worktree. Its Claude runs in the base workspace, rooted at the base,
-  in a pane of its own titled talk:<short name> (flow.json "talk": "tab": a tab of that name).
+  in a tab of its own named talk:<short name>, never in a split: a running one found sharing a tab with other panes
+  (an adopted session) is moved into a new tab once idle, still running.
 - The Claude agent of every item is named after its short name (kept in the note as agent), and its session id is
   recorded in the note as claude_session. A note with `mcp: <name>[,<name>...]` starts that Claude with
   `--mcp-config mcp/<name>.json` for each name. Every item's Claude starts with Remote Control on, in a folder
-  trusted ahead of time. Its session is named like its herdr tab or pane, work:<short name> or talk:<short name>
+  trusted ahead of time. Its session is named like its herdr tab, work:<short name> or talk:<short name>
   (Claude's prompt box, /resume and Remote Control): `--name` when theflow starts or resumes it, and a running one
   with another name gets `/rename` while its agent is idle. A name the user gave the session (one without a
   work:, talk: or hub: prefix) is kept.
@@ -349,7 +350,7 @@ class Sync:
             if not meta.get("agent") and not self.status:
                 set_note_field(note, "agent", name)
             # Its agent: the Claude pane in the base workspace with its name, or anywhere with its session id (an
-            # adopted session stays where it was started).
+            # adopted session stays in the workspace where it was started, in a tab of its own).
             agent = next((p for p in self.panes if p["workspace_id"] == ws and p.get("agent") == "claude"
                           and p.get("name") == name), None) or next(
                 (p for p in self.panes if sid and p.get("agent") == "claude" and p["pane_id"] not in self.claimed
@@ -365,55 +366,62 @@ class Sync:
                     hint = f"resume: theflow sync --start {base}/{item}" if sid else ""
                     self.item_row("-", label, f"no agent  (talk)  {hint}".rstrip(), idle, meta)
                 continue
-            self.say(f"=   {label:<22} talk, pane {agent['pane_id'] if agent else '-'}")
+            self.say(f"=   {label:<22} talk, tab {agent['tab_id'] if agent else '-'}")
             wanted = self.start == f"{base}/{item}"
             if agent:
                 self.adopt(agent, name, note, meta, title)
-                own_tab = [t for t in self.tabs if t["workspace_id"] == agent["workspace_id"]][:1] != \
-                    [t for t in self.tabs if t["tab_id"] == agent["tab_id"]]   # not its workspace's first tab
-                if self.hub.config["talk"] == "tab" and own_tab:
-                    tab_label = next((t.get("label") for t in self.tabs if t["tab_id"] == agent["tab_id"]), None)
-                    if is_default_tab(tab_label) or tab_label.startswith(self.p["talk"]) or tab_label == label:
-                        self.name_tab(agent["tab_id"], title)
-                elif self.hub.config["talk"] != "tab":
-                    self.hub.herdr_try("pane", "rename", agent["pane_id"], title)   # herdr doesn't report it
+                self.talk_tab(agent, label, title)
                 if wanted:
                     print(f"=   {name} is already running")
             elif wanted or (self.resume and sid):
-                pane = self.talk_pane(ws, path, title)
+                pane = self.talk_tab_pane(ws, path, title)
                 if pane:
                     self.start_claude(pane, name, note, meta, title)
             elif sid:
                 print(f"    resume with: theflow sync --start {base}/{item}")
 
-    def talk_pane(self, ws, path, title):
-        """A place for a talk item's Claude in the base workspace, rooted at the base: a tab of its own (talk: tab),
-        reusing an empty one of that name, or a new pane (the first to the right, the rest below it)."""
-        if self.hub.config["talk"] == "tab":
-            tab = next((t["tab_id"] for t in self.tabs if t["workspace_id"] == ws and t.get("label") == title), None)
-            free = next((p for p in self.panes if p["tab_id"] == tab and not p.get("agent")), None) if tab else None
-            if free:
-                return free["pane_id"]
-            res, err = self.hub.herdr_try("tab", "create", "--workspace", ws, "--cwd", str(path), "--label", title,
-                                          "--no-focus")
+    def talk_tab(self, agent, label, title):
+        """A running talk agent gets a tab of its own in the workspace it runs in. One that shares a tab with other
+        panes (a split, such as a session started next to a shell and adopted) moves into a new tab talk:<short name>,
+        Claude still running, but only while it is idle, so it never moves under someone's hands. A split the user
+        made inside its own talk:<short name> tab stays. A tab it has to itself is named talk:<short name>, unless it
+        is its workspace's first tab or the user named it."""
+        tab_label = next((t.get("label") for t in self.tabs if t["tab_id"] == agent["tab_id"]), None)
+        shared = any(p["tab_id"] == agent["tab_id"] and p["pane_id"] != agent["pane_id"] for p in self.panes)
+        if shared and tab_label != title:
+            if agent.get("agent_status") not in ("idle", "done"):
+                print(f"    {title} shares its tab: it moves into a tab of its own once idle, the next sync does it")
+                return
+            res, err = self.hub.herdr_try("pane", "move", agent["pane_id"], "--new-tab", "--workspace",
+                                          agent["workspace_id"], "--label", title, "--no-focus")
             if err:
-                print(f"!   could not create a tab in the base workspace {ws}: {err}")
-                return None
+                print(f"!   could not move {agent['pane_id']} out of its shared tab into a tab of its own: {err}")
+                return
+            tab = ((res.get("move_result") or {}).get("created_tab") or {}).get("tab_id", "?")
+            print(f"~   pane {agent['pane_id']} moved out of its shared tab into tab {tab} ({title})")
             self.refresh()
-            tab = res["tab"]["tab_id"]
-            print(f"+   tab {tab} ({title}) in the base workspace")
-            return next(p["pane_id"] for p in self.panes if p["tab_id"] == tab)
-        in_ws = [p for p in self.panes if p["workspace_id"] == ws]
-        res, err = self.hub.herdr_try("pane", "split", in_ws[-1]["pane_id"], "--direction",
-                                      "right" if len(in_ws) == 1 else "down", "--cwd", str(path), "--no-focus")
+            return
+        first = next((t["tab_id"] for t in self.tabs if t["workspace_id"] == agent["workspace_id"]), None)
+        if not shared and agent["tab_id"] != first and (
+                is_default_tab(tab_label) or tab_label.startswith(self.p["talk"]) or tab_label == label):
+            self.name_tab(agent["tab_id"], title)
+
+    def talk_tab_pane(self, ws, path, title):
+        """The pane to start a talk item's Claude in: a new tab of its own in the base workspace, rooted at the base,
+        or an empty one of that name (one pane at the base, nothing running). Never a split."""
+        tab = next((t["tab_id"] for t in self.tabs if t["workspace_id"] == ws and t.get("label") == title), None)
+        free = [p for p in self.panes if p["tab_id"] == tab] if tab else []
+        if len(free) == 1 and not free[0].get("agent") and free[0].get("cwd") == str(path):
+            return free[0]["pane_id"]
+        res, err = self.hub.herdr_try("tab", "create", "--workspace", ws, "--cwd", str(path), "--label", title,
+                                      "--no-focus")
         if err:
-            print(f"!   could not split a pane in the base workspace {ws}: {err}")
+            print(f"!   could not create a tab in the base workspace {ws}: {err}")
             return None
-        pane = res["pane"]["pane_id"]
-        self.hub.herdr_try("pane", "rename", pane, title)
         self.refresh()
-        print(f"+   pane {pane} ({title}) in the base workspace")
-        return pane
+        tab = res["tab"]["tab_id"]
+        print(f"+   tab {tab} ({title}) in the base workspace")
+        return next(p["pane_id"] for p in self.panes if p["tab_id"] == tab)
 
     # ---- agents ------------------------------------------------------------------------------------------------
 

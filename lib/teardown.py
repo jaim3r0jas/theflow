@@ -22,8 +22,8 @@ item (note field opened_by) if it is alive and idle, and shows a herdr notificat
 note in place with status: wrapping, and reports what is left. Log of a --detach run:
 items/.logs/<base>-<ITEM-ID>-teardown.log.
 
-A talk item (kind: talk) has no worktree: nothing can be pending, and the teardown only closes its agent's pane (or
-tab) in the base workspace, then records the closing the same way.
+A talk item (kind: talk) has no worktree: nothing can be pending, and the teardown only closes its agent's tab in the
+base workspace (just its pane, should it share the tab with other panes), then records the closing the same way.
 """
 import datetime
 import json
@@ -358,7 +358,8 @@ class Item:
         return self.finish(by, opts, log, left)
 
     def run_talk(self, opts, by, self_pane):
-        """A talk item holds nothing but its agent's pane (or tab) in the base workspace: close it."""
+        """A talk item holds nothing but its agent's tab in the base workspace: close it. A tab the agent shares with
+        other panes stays open, only the agent's pane closes."""
         status, pane, tab = self.agent_status()
         if status in ("working", "blocked") and pane != self_pane:
             return self.finish(by, opts, [], [f"agent {self.agent} is {status}: nothing removed"], removed=False)
@@ -368,17 +369,21 @@ class Item:
         log, left = [], []
         tabs = (self.hub.herdr_try("tab", "list")[0] or {}).get("tabs", [])
         tab_label = next((t.get("label") for t in tabs if t["tab_id"] == tab), "")
-        if tab and tab_label == f"{self.hub.prefix['talk']}{self.label}":
+        panes = (self.hub.herdr_try("pane", "list")[0] or {}).get("panes", [])
+        alone = [p["pane_id"] for p in panes if p["tab_id"] == tab] == [pane]
+        if tab and alone and tab_label == f"{self.hub.prefix['talk']}{self.label}":
             _, err = self.hub.herdr_try("tab", "close", tab)
             (left if err else log).append(f"herdr tab {tab} not closed: {err[:120]}" if err
                                           else f"herdr tab {tab} ({tab_label}) closed")
-        elif pane and self.root_pane(pane):
+        elif pane and self.root_pane(pane, panes):
             left.append(f"agent {self.agent} runs in its workspace's own pane {pane}, which stays open: exit Claude "
                         "there (/exit)")
         elif pane:
             _, err = self.hub.herdr_try("pane", "close", pane)
             (left if err else log).append(f"herdr pane {pane} not closed: {err[:120]}" if err
                                           else f"herdr pane {pane} ({self.agent}) closed")
+            if tab and not alone and not err:
+                log.append(f"its tab {tab} ({tab_label}) stays: other panes run in it")
         else:
             log.append("no agent pane was open")
         time.sleep(2)
@@ -386,9 +391,8 @@ class Item:
             left.append(f"agent {self.agent} still running")
         return self.finish(by, opts, log, left, removed=not any(x.startswith("herdr") for x in left))
 
-    def root_pane(self, pane):
+    def root_pane(self, pane, panes):
         """Whether a pane is its workspace's first one (an adopted session's): closing it would close the workspace."""
-        panes = (self.hub.herdr_try("pane", "list")[0] or {}).get("panes", [])
         ws = next((p["workspace_id"] for p in panes if p["pane_id"] == pane), None)
         return next((p["pane_id"] for p in panes if p["workspace_id"] == ws), None) == pane
 

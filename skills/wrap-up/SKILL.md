@@ -167,7 +167,7 @@ the item, and the log path it printed) and **stop**: no more tool calls. The tea
 idle, then closes its workspace, which ends it.
 
 A **talk item** has no worktree, so `--check` always finds nothing pending and the teardown only closes its agent's
-pane (or tab) in the base workspace (in self mode, once this turn ends), then records the closing like any item.
+tab in the base workspace (in self mode, once this turn ends), then records the closing like any item.
 
 What the teardown does, in this order, refusing to start when the inventory finds pending work without `--discard`,
 the agent is working or blocked (other than the self-mode session), or the note has no `## Outcome`:

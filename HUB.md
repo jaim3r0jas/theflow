@@ -15,10 +15,9 @@ Three kinds, all dispatched from a hub session:
 - **Code item** (the default): the work changes files in a git base. It gets a git worktree of the base under
   `work/<base>/<ITEM-ID>`, its own herdr workspace nested under the base's, and its Claude runs there.
 - **Talk item** (`kind: talk`): no repo changes: investigating, planning, triage, answering a question, work done in
-  other tools. No worktree: its Claude runs in the base's herdr workspace (a pane of its own, or a tab with
-  `"talk": "tab"` in `flow.json`), rooted at the base. In an owned base it is read-only; in a writable base (a linked
-  folder of yours) it may change files there. If it turns out to need changes it cannot make, it says so and the hub
-  starts a code item for them.
+  other tools. No worktree: its Claude runs in the base's herdr workspace, in a tab of its own (never a split), rooted
+  at the base. In an owned base it is read-only; in a writable base (a linked folder of yours) it may change files
+  there. If it turns out to need changes it cannot make, it says so and the hub starts a code item for them.
 - **Review item** (`kind: review`, `/review`): a GitHub PR checked out **detached** in `work/<base>/review-<n>`; its
   Claude drafts a review in your voice and posts it when you say so.
 
@@ -46,7 +45,7 @@ missing, then sets the item up.
 👋 <hub name>: one Claude session per item. This session only dispatches and wraps up.
 
 /work-on <what> on <base>     (I prepare the base, create the worktree and its herdr workspace, or for a talk
-                                  with no code changes a pane in the base's workspace, start Claude there and
+                                  with no code changes a tab in the base's workspace, start Claude there and
                                   send it the kickoff)
   /work-on ABC-123 on api                          a ticket (if this hub uses a tracker)
   /work-on #709 on api                             continue a GitHub PR's branch
@@ -78,7 +77,7 @@ How to handle `/work-on <what> on <base>` (details in the skill):
 - An agent no item claims (`theflow status` lists it with its session id): adopt it as a talk item.
 - `<base>` is a folder in `bases/`; several, comma-separated, mean one worktree per base with the same `<ITEM-ID>`.
 - Then **stop**. Do not start the actual work in the hub session. Send the **kickoff prompt** to the new agent and
-  reply with the worktree path(s) (or the talk item's pane), the herdr label(s), the agent name(s) and the kickoff.
+  reply with the worktree path(s) (or the talk item's tab), the herdr label(s), the agent name(s) and the kickoff.
 
 ### Kickoff prompt (every new item)
 
@@ -150,7 +149,6 @@ still starts the item but says so and names the idle ones as candidates for `wra
   "claude_home": "",                   // CLAUDE_CONFIG_DIR for the hub's sessions ("" = ~/.claude)
   "remote_control_prefix": "",         // prefix of unnamed Remote Control sessions under `theflow open`
   "wip_limit": 6, "stale_days": 7,
-  "talk": "pane",                      // or "tab"
   "branch": {"ticket": "feat/{ticket}/{desc}", "adhoc": "feat/ad-hoc/{desc}"},
   "prefixes": {"base": "base:", "work": "work:", "talk": "talk:", "hub": "hub:"},
   "noise": [".husky/_/"],              // untracked paths that are never pending work
@@ -230,7 +228,7 @@ An item lives until its work is **merged** (or the question answered), then it *
 alone, from the item's own session. It warns about pending work, stores a short outcome, and `theflow teardown`
 removes what the item created: Docker compose stacks started from the worktree, processes running in it, its herdr
 workspace, the worktree, its branches and stashes, the merged remote branch; then it resyncs an owned base. A talk
-item holds nothing but its pane (or tab), so its wrap-up records the outcome and closes it. Every closing is
+item holds nothing but its tab, so its wrap-up records the outcome and closes it. Every closing is
 appended to `items/inbox.md`, sent as an FYI to the session that opened the item (note field `opened_by`) when it is
 alive and idle, and shown as a herdr notification. Never delete a worktree whose work is not merged unless the user
 explicitly says so.
@@ -241,8 +239,8 @@ The herdr sidebar mirrors the hub:
 
 ```
 work-hub                    ← hub workspace (cwd: the hub root): hub sessions only, tabs hub:<slug>
-base:api                    ← base workspace (cwd bases/api); each talk item adds a pane here,
-                              titled talk:<short name> (agent <short name>)
+base:api                    ← base workspace (cwd bases/api); each talk item adds a tab here,
+                              named talk:<short name> (agent <short name>)
   retry-sync                ← worktree workspace nested under its base, main tab work:retry-sync, agent retry-sync
 base:notes
 ```
@@ -251,7 +249,9 @@ base:notes
 - a **worktree workspace** is the item's **short name** alone: 1 to 3 lowercase words joined by dashes, at most
   about 20 characters, naming the work (`retry-sync`; a review: `rv-retry-limit`). Never a ticket ID: the ID belongs in
   the branch. Its main tab, where the item's Claude runs, is `work:<short name>`;
-- a **talk item's pane** (or tab) is `talk:<short name>`;
+- a **talk item's tab** is `talk:<short name>`: a tab of its own, never a split. A talk agent found sharing a tab
+  with other panes (a session started next to a shell, then adopted) is moved into a new tab by `theflow sync`
+  once it is idle, still running;
 - a **hub tab** is `hub:<random slug>` until the user names it otherwise.
 
 The short name is the note's `label` and also the agent's name (herdr names match `[a-z][a-z0-9_-]{0,31}`), so it
@@ -259,7 +259,7 @@ must be unique among active items: for a multi-base item, add the base to all bu
 `export-csv-web`). Labels are display only: workspaces are found by path, never by label. `theflow sync` puts every
 name above back on each run; a tab the user named keeps its name.
 
-An item's Claude **session** carries the name of its tab or pane, `work:<short name>` or `talk:<short name>`, in
+An item's Claude **session** carries the name of its tab, `work:<short name>` or `talk:<short name>`, in
 Claude's prompt box, `/resume` and the Remote Control list: `theflow sync` passes `--name` when it starts or resumes
 it, and sends `/rename` to a running one with another name (no model turn, only while its agent is idle). A name
 the user gave the session (one without a `work:`, `talk:` or `hub:` prefix) is kept. Hub sessions keep `hub:<slug>`.
