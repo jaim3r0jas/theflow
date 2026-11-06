@@ -11,6 +11,7 @@ from flowlib import FLOW, Hub
 SKILLS = ["work-on", "wrap-up", "review"]
 PROTECT = f'"{FLOW}/bin/theflow" hook protect-bases'
 SESSION_START = f'"{FLOW}/bin/theflow" hook session-start'
+STATUSLINE = {"type": "command", "command": f'bash "{FLOW}/lib/statusline.sh"', "refreshInterval": 1}
 
 
 def load_json(path):
@@ -37,6 +38,12 @@ def add_hook(settings, event, matcher, command):
     settings.setdefault("hooks", {}).setdefault(event, []).append(
         {"matcher": matcher, "hooks": [{"type": "command", "command": command}]})
     return True
+
+
+def is_theflows_status_line(status_line):
+    """A statusLine running some theflow checkout's lib/statusline.sh (this one, or one that moved)."""
+    command = status_line.get("command", "") if isinstance(status_line, dict) else ""
+    return command.startswith('bash "') and command.endswith('/lib/statusline.sh"')
 
 
 def init(args):
@@ -73,8 +80,8 @@ def init(args):
     if trusted:
         print(f"+ trusted {trusted} for Claude")
     if "--no-install" in args:
-        print(f"Skipped the install: run `theflow install` in {root} to link the skills and the base guard into "
-              f"{hub.claude_home}.")
+        print(f"Skipped the install: run `theflow install` in {root} to link the skills, the base guard and the status "
+              f"line into {hub.claude_home}.")
     else:
         install([], hub)
     print(f"\nNext: add bases (git clone <url> {root}/bases/<name>, or ln -s <your folder> {root}/bases/<name>),"
@@ -82,7 +89,8 @@ def init(args):
 
 
 def install(args, hub=None):
-    """theflow install: link the skills and the base guard into this hub's Claude home, theflow onto PATH."""
+    """theflow install: link the skills, the base guard and (unless it has one) the status line into this hub's Claude
+    home, theflow onto PATH."""
     hub = hub or Hub()
     home = hub.claude_home
     skills = home / "skills"
@@ -102,9 +110,25 @@ def install(args, hub=None):
         link.symlink_to(target)
     settings_path = home / "settings.json"
     settings = load_json(settings_path)
-    if add_hook(settings, "PreToolUse", "Bash|Edit|Write|MultiEdit|NotebookEdit", PROTECT):
-        save_json(settings_path, settings)
+    changed = add_hook(settings, "PreToolUse", "Bash|Edit|Write|MultiEdit|NotebookEdit", PROTECT)
+    if changed:
         print(f"+ PreToolUse base guard in {settings_path}")
+    own = settings.get("statusLine")
+    if not own:
+        settings["statusLine"] = STATUSLINE
+        changed = True
+        print(f"+ status line in {settings_path}")
+    elif is_theflows_status_line(own):
+        # theflow's line from this or another checkout: point it here, keep what was tuned (refreshInterval, padding)
+        updated = {**STATUSLINE, **own, "command": STATUSLINE["command"]}
+        if updated != own:
+            settings["statusLine"] = updated
+            changed = True
+            print(f"~ status line in {settings_path}: now {STATUSLINE['command']}")
+    else:
+        print(f"= {settings_path} has a statusLine of its own: left alone (theflow's: {STATUSLINE['command']})")
+    if changed:
+        save_json(settings_path, settings)
     bin_dir = Path.home() / ".local" / "bin"
     exe = bin_dir / "theflow"
     if not shutil.which("theflow") and not exe.exists():
@@ -140,7 +164,16 @@ def doctor(args):
         link = home / "skills" / name
         check(link.is_symlink() and link.resolve() == (FLOW / "skills" / name).resolve(),
               f"skill {name} linked in {home / 'skills'}", "theflow install")
-    check(has_hook(load_json(home / "settings.json"), "PreToolUse", PROTECT), "base guard hook", "theflow install")
+    settings = load_json(home / "settings.json")
+    check(has_hook(settings, "PreToolUse", PROTECT), "base guard hook", "theflow install")
+    status_line = settings.get("statusLine")
+    if is_theflows_status_line(status_line):
+        check(status_line["command"] == STATUSLINE["command"], "theflow's status line", "theflow install")
+    elif status_line:
+        print(f"--  a status line of your own (for theflow's: remove statusLine from {home / 'settings.json'}, "
+              "then theflow install)")
+    else:
+        print("--  no status line (theflow install sets theflow's)")
     check(has_hook(load_json(root / ".claude" / "settings.json"), "SessionStart", SESSION_START),
           "SessionStart hook in the hub", f"theflow init {root}")
     claude_md = root / "CLAUDE.md"

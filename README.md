@@ -63,9 +63,20 @@ theflow open                                      # start herdr with the hub mir
 
 In herdr's hub workspace, run `claude`: the first reply shows what is active and how to start an item.
 
-`theflow init` links the skills into the hub's Claude home (`~/.claude/skills`) and registers the base guard in its
-`settings.json`; `theflow install` does only that, for an existing hub. Fill in the hub's `CLAUDE.md`: its bases, its
-ticket system (if any), and anything every kickoff or wrap-up should add. The skills read it.
+`theflow init` links the skills into the hub's Claude home (`~/.claude/skills`) and registers the base guard and,
+unless the home already has one, theflow's status line in its `settings.json`; `theflow install` does only that, for an
+existing hub. Fill in the hub's `CLAUDE.md`: its bases, its ticket system (if any), and anything every kickoff or
+wrap-up should add. The skills read it.
+
+The status line ([lib/statusline.sh](lib/statusline.sh), refreshed every second, needs `jq` and a powerline font):
+
+```
+ ~/P/h/w/api/retry-sync   feat/retry-sync ±  Opus 5.5 (1M)  ctx 42%     3 work, 2 talk of 6 │ 5h 37% 2h09m→15:42 │ 7d 81% 3d11h→Tue 00:52 │ 13:32
+```
+
+the folder, the branch (± with uncommitted changes), the model, the context used; on the right the hub's active
+items against `wip_limit`, the 5-hour and weekly limits used with the time to their reset, and the clock. A
+`statusLine` you set yourself is never replaced: remove it and run `theflow install` to switch to theflow's.
 
 ## Commands
 
@@ -119,7 +130,7 @@ theflow init ~/Personal/hub --name personal-hub --herdr-session personal --claud
 `theflow open` in a hub starts its herdr session with `CLAUDE_CONFIG_DIR` set for every pane (and, with
 `remote_control_prefix`, a Remote Control name prefix for unnamed sessions, such as the hub's own; an item's session
 is named `work:<short name>` or `talk:<short name>`). Run `theflow install` in each hub: the
-skills and the guard go into that hub's Claude home.
+skills, the guard and the status line go into that hub's Claude home.
 
 ## Per-hub extras
 

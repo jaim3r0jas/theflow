@@ -9,7 +9,7 @@ usage() {
 theflow <command> [args]          (run inside a hub: a folder with flow.json, or set FLOW_HUB)
 
   init <dir> [--name N]           create a hub (bases/, work/, items/, flow.json, CLAUDE.md, hooks) and install
-  install                         link the skills and the base guard into this hub's Claude home
+  install                         link the skills, the base guard and the status line into this hub's Claude home
   doctor                          check what the hub needs
   open [herdr args]               start or attach the hub's herdr session, mirrored and resumed
   sync [--start B/ID] [--resume]  mirror bases and items into herdr; start or resume an item's Claude
