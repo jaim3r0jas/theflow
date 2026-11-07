@@ -1,4 +1,5 @@
-"""theflow install sets the status line in the hub's Claude home, never over one of its own; the script renders.
+"""theflow install sets the status line in the hub's Claude home, never over one of its own, and moves the
+SessionStart hook there from the hub; the script renders.
 
 Run from the repo root: python3 -m unittest discover -s tests
 """
@@ -30,12 +31,14 @@ class InstallTest(unittest.TestCase):
         self.addCleanup(shutil.rmtree, self.tmp)
         self.home = self.tmp / "claude-home"
         self.settings = self.home / "settings.json"
+        self.root = self.tmp / "hub"
+        self.hub_settings = self.root / ".claude" / "settings.json"
 
     def install(self):
         """Run install against the temp Claude home (theflow already on PATH), returning what it printed."""
         out = io.StringIO()
         with mock.patch("admin.shutil.which", return_value="/usr/local/bin/theflow"), contextlib.redirect_stdout(out):
-            admin.install([], SimpleNamespace(claude_home=self.home))
+            admin.install([], SimpleNamespace(claude_home=self.home, root=self.root))
         return out.getvalue()
 
     def test_sets_the_status_line_and_the_guard(self):
@@ -45,7 +48,37 @@ class InstallTest(unittest.TestCase):
         self.assertEqual(settings["statusLine"]["refreshInterval"], 1)
         self.assertIn(str(SCRIPT), settings["statusLine"]["command"])
         self.assertTrue(admin.has_hook(settings, "PreToolUse", admin.PROTECT))
+        self.assertTrue(admin.has_hook(settings, "SessionStart", admin.SESSION_START))
+        self.assertFalse(self.hub_settings.exists())
         self.assertIn("+ status line", out)
+
+    def test_moves_the_session_start_hook_out_of_the_hub(self):
+        moved = '"/old/theflow/bin/theflow" hook session-start'
+        own = {"type": "command", "command": "echo hi"}
+        self.hub_settings.parent.mkdir(parents=True)
+        ours = {"matcher": "startup|clear", "hooks": [{"type": "command", "command": admin.SESSION_START}]}
+        self.hub_settings.write_text(json.dumps({"hooks": {
+            "SessionStart": [ours, {"matcher": "startup", "hooks": [{"type": "command", "command": moved}, own]}],
+            "Stop": [{"hooks": [own]}]}, "theme": "dark"}))
+        out = self.install()
+        settings = json.loads(self.settings.read_text())
+        self.assertEqual(settings["hooks"]["SessionStart"], [ours])
+        self.assertEqual(json.loads(self.hub_settings.read_text()), {"hooks": {
+            "SessionStart": [{"matcher": "startup", "hooks": [own]}], "Stop": [{"hooks": [own]}]}, "theme": "dark"})
+        self.assertIn("+ SessionStart hook", out)
+        self.assertIn("- SessionStart hook", out)
+
+    def test_a_hub_with_only_the_hook_is_left_empty(self):
+        self.hub_settings.parent.mkdir(parents=True)
+        self.hub_settings.write_text(json.dumps({"hooks": {"SessionStart": [
+            {"matcher": "startup|clear", "hooks": [{"type": "command", "command": admin.SESSION_START}]}]}}))
+        self.install()
+        self.assertEqual(json.loads(self.hub_settings.read_text()), {})
+
+    def test_a_hub_group_without_hooks_is_left_alone(self):
+        settings = {"hooks": {"SessionStart": [{"matcher": "startup"}]}}
+        self.assertFalse(admin.remove_hooks(settings, "SessionStart", admin.is_theflows_session_start))
+        self.assertEqual(settings, {"hooks": {"SessionStart": [{"matcher": "startup"}]}})
 
     def test_rerun_changes_nothing(self):
         self.install()
@@ -54,6 +87,7 @@ class InstallTest(unittest.TestCase):
         self.assertEqual(self.settings.read_bytes(), before)
         self.assertEqual(self.settings.stat().st_mtime_ns, mtime)
         self.assertNotIn("status line", out)
+        self.assertNotIn("SessionStart", out)
 
     def test_keeps_a_status_line_of_its_own(self):
         own = {"type": "command", "command": "bash ~/my-line.sh"}

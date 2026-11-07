@@ -61,10 +61,13 @@ theflow doctor                                    # what is missing
 theflow open                                      # start herdr with the hub mirrored in it
 ```
 
-In herdr's hub workspace, run `claude`: the first reply shows what is active and how to start an item.
+In herdr's hub workspace, run `claude`: the first reply shows what is active and how to start an item. The first tab
+of a base's workspace (`base:api`) is a hub session too, for that base: `/work-on retry failed syncs` there means
+`on api`.
 
-`theflow init` links the skills into the hub's Claude home (`~/.claude/skills`) and registers the base guard and,
-unless the home already has one, theflow's status line in its `settings.json`; `theflow install` does only that, for an
+`theflow init` links the skills into the hub's Claude home (`~/.claude/skills`) and registers the base guard, the
+SessionStart hook that greets hub sessions and, unless the home already has one, theflow's status line in its
+`settings.json`; `theflow install` does only that, for an
 existing hub. Fill in the hub's `CLAUDE.md`: its bases, its ticket system (if any), and anything every kickoff or
 wrap-up should add. The skills read it.
 

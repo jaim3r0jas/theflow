@@ -46,9 +46,9 @@ The status ends with a line counting the active items against `wip_limit`, and f
 them, so when a **new** item would go over the limit, say so in the one-line plan (step 4) and name the idle items as
 candidates for `/wrap-up` (or `cancel`). It is a warning, not a gate.
 
-Outside herdr (`theflow status` says herdr is not running), list `work/*/*/` and `items/*/*.md` instead. If this is
-the first reply of a hub session, show the welcome block from the hub rules (bases and the Active lines filled in;
-the SessionStart hook already passed the status output).
+Outside herdr (`theflow status` says herdr is not running), list `work/*/*/` and `items/*/*.md` instead. If this is the
+first reply of a hub session (the hub root, or a base workspace's first tab), show the welcome block from the hub rules
+(bases and the Active lines filled in; the SessionStart hook already passed the status output).
 
 Each base is **owned** (a git clone in `bases/`: read-only, reset to origin before each item) or **linked** (a
 symlink to a folder of the user's: never reset, and writable unless `flow.json` says otherwise); a base without git
@@ -60,7 +60,8 @@ Split the arguments into `<what>` and `<base>`:
 
 - `<base>` is the text after the **last** ` on ` (or a leading `on <base>`), but only when every comma-separated word
   there is a folder in `bases/`. Otherwise ` on ` is part of the description and there is no base yet. Accept loose
-  forms like "base `api`" or "in api" too.
+  forms like "base `api`" or "in api" too. In a base workspace's first tab (a hub session for that base: the
+  SessionStart hook says so), a request with no base is for that base.
 - Classify `<what>`, first match wins:
   1. **Adopt**: the user points at an agent that `theflow status` lists as `no item` ("adopt pane w5:p2", "adopt the
      cleanup session").

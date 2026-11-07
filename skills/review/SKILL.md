@@ -41,10 +41,10 @@ commits to it), that is `work-on #<n>`, not a review.
 
 ## 1. Look around
 
-Same as `work-on` step 1: `ls -l bases; cat flow.json; theflow status; theflow gh-check`, and a gh login problem
-stops here until the user has run the printed `! gh auth login ...`. If this is the first reply of a hub session,
-show the welcome block from the hub rules first. After creating the worktree (step 4), `theflow gh-check
-work/<base>/review-<n>` installs the gh version that repo pins, if it is missing.
+Same as `work-on` step 1: `ls -l bases; cat flow.json; theflow status; theflow gh-check`, and a gh login problem stops
+here until the user has run the printed `! gh auth login ...`. If this is the first reply of a hub session (the hub
+root, or a base workspace's first tab), show the welcome block from the hub rules first. After creating the worktree
+(step 4), `theflow gh-check work/<base>/review-<n>` installs the gh version that repo pins, if it is missing.
 
 ## 2. Read the sentence
 

@@ -3,7 +3,9 @@
 Names (kept on every run, so a workspace closed and opened again gets them back; prefixes from flow.json):
 - The hub itself gets a workspace labelled with the hub's name; its tabs that still have herdr's default number
   get hub:<random slug> (a name the user gave a tab is kept).
-- Every base gets a workspace labelled base:<name>, rooted at the base (a linked base at its real folder).
+- Every base gets a workspace labelled base:<name>, rooted at the base (a linked base at its real folder). A Claude
+  in its first tab, at the base's folder, is a hub session too (no item claims it); the SessionStart hook names that
+  tab hub:<base> while it still has herdr's default number.
 - Every worktree of a git base that lives under work/ is a code item. It is opened as a child workspace of the
   base, labelled with the item's short name from its note (no prefix; backfill: the first words of the branch
   description, never a ticket ID), and its main tab is work:<short name>. A newly opened one also gets the base's
@@ -35,6 +37,8 @@ Workspaces are matched by path, never by label. Nothing is ever closed, so this 
                       hub session shows them once).
   --hub-tab           only name the tab of the current pane ($HERDR_PANE_ID) in the hub: hub:<random slug> if it
                       still has its default number, then print its label (the SessionStart hook's session title).
+  --hub-tab --base B  the same for the first tab of base B's workspace (hub:B); prints nothing when the pane is not
+                      in that tab at the base's folder (a later tab, a talk tab, another workspace).
 """
 import contextlib
 import datetime
@@ -101,17 +105,25 @@ class Sync:
                   else f"~   tab {tab_id} renamed {tab.get('label')} -> {label}")
             tab["label"] = label
 
-    def name_hub_tabs(self, ws, only_tab=None):
-        """Hub tabs still carrying herdr's default number get hub:<adjective>-<noun>; chosen names stay."""
+    def name_hub_tabs(self, ws, only_tab=None, label=None):
+        """Hub tabs still carrying herdr's default number get hub:<adjective>-<noun> (or the label given); chosen
+        names stay."""
         taken = {t.get("label") for t in self.tabs}
         for t in self.tabs:
             if t["workspace_id"] == ws and is_default_tab(t.get("label")) and only_tab in (None, t["tab_id"]):
-                while True:
-                    label = f"{self.p['hub']}{random.choice(SLUG_WORDS[0])}-{random.choice(SLUG_WORDS[1])}"
-                    if label not in taken:
-                        break
-                taken.add(label)
-                self.name_tab(t["tab_id"], label)
+                name = label or self.hub_slug(taken)
+                taken.add(name)
+                self.name_tab(t["tab_id"], name)
+
+    def hub_slug(self, taken):
+        while True:
+            label = f"{self.p['hub']}{random.choice(SLUG_WORDS[0])}-{random.choice(SLUG_WORDS[1])}"
+            if label not in taken:
+                return label
+
+    def first_tab(self, ws):
+        """The workspace's first tab by position (herdr's tab number), or None."""
+        return min((t for t in self.tabs if t["workspace_id"] == ws), key=lambda t: t.get("number") or 0, default=None)
 
     # ---- status rows -------------------------------------------------------------------------------------------
 
@@ -161,12 +173,25 @@ class Sync:
         if ws:
             self.name_hub_tabs(ws)
 
-    def base_workspace(self, name, path, label):
-        """(workspace id, worktrees) of a base: a git base's main checkout, else the workspace rooted at it."""
+    def find_base_workspace(self, name, path):
+        """(workspace id or None, worktrees) of a base: a git base's main checkout, else the workspace rooted at it."""
         trees = self.hub.herdr("worktree", "list", "--cwd", str(path))["worktrees"] if self.hub.is_git(name) else []
         main = next((t for t in trees if not t["is_linked_worktree"]), None)
         ws = main.get("open_workspace_id") if main else next(
             (p["workspace_id"] for p in self.panes if p.get("cwd") == str(path)), None)
+        return ws, trees
+
+    def is_base_hub_tab(self, pane, ws, name):
+        """Whether the pane is in the first tab of base name's workspace ws, at the base's folder, in no item's
+        work:/talk: tab: a Claude there is a hub session, not an item."""
+        tab = self.first_tab(ws)
+        where = {str(self.hub.bases / name), str(self.hub.base_path(name))}
+        return bool(tab) and pane["tab_id"] == tab["tab_id"] and pane.get("cwd") in where \
+            and not (tab.get("label") or "").startswith((self.p["work"], self.p["talk"]))
+
+    def base_workspace(self, name, path, label):
+        """(workspace id, worktrees) of a base, its workspace opened if missing (not under --status)."""
+        ws, trees = self.find_base_workspace(name, path)
         if ws:
             self.say(f"= {label:<24} {ws}")
             self.name_workspace(ws, label)
@@ -401,7 +426,7 @@ class Sync:
             print(f"~   pane {agent['pane_id']} moved out of its shared tab into tab {tab} ({title})")
             self.refresh()
             return
-        first = next((t["tab_id"] for t in self.tabs if t["workspace_id"] == agent["workspace_id"]), None)
+        first = (self.first_tab(agent["workspace_id"]) or {}).get("tab_id")
         if not shared and agent["tab_id"] != first and (
                 is_default_tab(tab_label) or tab_label.startswith(self.p["talk"]) or tab_label == label):
             self.name_tab(agent["tab_id"], title)
@@ -486,10 +511,12 @@ class Sync:
         else:
             print(f"    started {name} (claude {flag} {sid}, session {title}, remote control on)")
 
-    def orphans(self, base_label, base_ws):
-        """Claude agents in a base's workspaces that no item claims, with what adopting them needs."""
+    def orphans(self, base, base_label, ws, base_ws):
+        """Claude agents in a base's workspaces that no item claims, with what adopting them needs. A Claude in the
+        base workspace's first tab is a hub session, not an orphan."""
         for p in self.panes:
-            if p.get("agent") == "claude" and p["workspace_id"] in base_ws and p["pane_id"] not in self.claimed:
+            if p.get("agent") == "claude" and p["workspace_id"] in base_ws and p["pane_id"] not in self.claimed \
+                    and not self.is_base_hub_tab(p, ws, base):
                 where = self.labels.get(p["workspace_id"]) or base_label
                 title = p.get("terminal_title_stripped") or "untitled"
                 sid = (p.get("agent_session") or {}).get("value") or "?"
@@ -533,7 +560,8 @@ class Sync:
             self.worktrees(base, ws, trees)
             self.talks(base, path, ws)
             if self.status:
-                self.orphans(label, {ws} | {t["open_workspace_id"] for t in trees if t.get("open_workspace_id")})
+                self.orphans(base, label, ws,
+                             {ws} | {t["open_workspace_id"] for t in trees if t.get("open_workspace_id")})
                 self.duplicates(base, path, label, ws)
         if self.status:
             self.stray_notes()
@@ -563,12 +591,18 @@ def main():
     if not hub.herdr_running():
         sys.exit("herdr is not running; open it with `theflow open`")
     if "--hub-tab" in args:
+        base = args[args.index("--base") + 1] if "--base" in args[:-1] else None
         sync = Sync(hub)
         pane = next((p for p in sync.panes if p["pane_id"] == os.environ.get("HERDR_PANE_ID")), None)
         if not pane:
             return
+        if base:
+            ws = sync.find_base_workspace(base, hub.base_path(base))[0] if base in hub.base_names() else None
+            if not ws or not sync.is_base_hub_tab(pane, ws, base):
+                return
         with contextlib.redirect_stdout(io.StringIO()):   # only the label goes out: it becomes the session title
-            sync.name_hub_tabs(pane["workspace_id"], only_tab=pane["tab_id"])
+            sync.name_hub_tabs(pane["workspace_id"], only_tab=pane["tab_id"],
+                               label=f"{hub.prefix['hub']}{base}" if base else None)
         print(next((t.get("label") for t in sync.tabs if t["tab_id"] == pane["tab_id"]), ""))
         return
     Sync(hub, status="--status" in args, resume="--resume" in args, start=start,

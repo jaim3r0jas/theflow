@@ -40,6 +40,33 @@ def add_hook(settings, event, matcher, command):
     return True
 
 
+def remove_hooks(settings, event, is_ours):
+    """Drop the event's hooks whose command is_ours, and any group or event they leave empty. True if one went."""
+    groups, kept, removed = settings.get("hooks", {}).get(event, []), [], False
+    for m in groups:
+        hooks = [h for h in m.get("hooks", []) if not is_ours(h.get("command", ""))]
+        if len(hooks) == len(m.get("hooks", [])):
+            kept.append(m)   # none of ours: kept as it is, even a group without hooks
+            continue
+        removed = True
+        if hooks:
+            kept.append({**m, "hooks": hooks})
+    if not removed:
+        return False
+    if kept:
+        settings["hooks"][event] = kept
+    else:
+        del settings["hooks"][event]
+        if not settings["hooks"]:
+            del settings["hooks"]
+    return True
+
+
+def is_theflows_session_start(command):
+    """The SessionStart hook of some theflow checkout (this one, or one that moved)."""
+    return command.startswith('"') and command.endswith('/bin/theflow" hook session-start')
+
+
 def is_theflows_status_line(status_line):
     """A statusLine running some theflow checkout's lib/statusline.sh (this one, or one that moved)."""
     command = status_line.get("command", "") if isinstance(status_line, dict) else ""
@@ -70,18 +97,13 @@ def init(args):
         print(f"+ {claude_md} (fill in its own sections)")
     else:
         print(f"= {claude_md} kept: make sure it imports @{FLOW}/HUB.md")
-    settings_path = root / ".claude" / "settings.json"
-    settings = load_json(settings_path)
-    if add_hook(settings, "SessionStart", "startup|clear", SESSION_START):
-        save_json(settings_path, settings)
-        print(f"+ SessionStart hook in {settings_path}")
     hub = Hub(root)
     trusted = hub.trust(root)
     if trusted:
         print(f"+ trusted {trusted} for Claude")
     if "--no-install" in args:
-        print(f"Skipped the install: run `theflow install` in {root} to link the skills, the base guard and the status "
-              f"line into {hub.claude_home}.")
+        print(f"Skipped the install: run `theflow install` in {root} to link the skills, the base guard, the hub "
+              f"welcome hook and the status line into {hub.claude_home}.")
     else:
         install([], hub)
     print(f"\nNext: add bases (git clone <url> {root}/bases/<name>, or ln -s <your folder> {root}/bases/<name>),"
@@ -89,8 +111,10 @@ def init(args):
 
 
 def install(args, hub=None):
-    """theflow install: link the skills, the base guard and (unless it has one) the status line into this hub's Claude
-    home, theflow onto PATH."""
+    """theflow install: link the skills, the base guard, the SessionStart hook and (unless it has one) the status line
+    into this hub's Claude home, theflow onto PATH. The hook runs for every session there and greets only hub
+    sessions (lib/session-start.py); a copy left in the hub's own .claude/settings.json (older theflow) is removed,
+    so the hub root never greets twice."""
     hub = hub or Hub()
     home = hub.claude_home
     skills = home / "skills"
@@ -113,6 +137,14 @@ def install(args, hub=None):
     changed = add_hook(settings, "PreToolUse", "Bash|Edit|Write|MultiEdit|NotebookEdit", PROTECT)
     if changed:
         print(f"+ PreToolUse base guard in {settings_path}")
+    if add_hook(settings, "SessionStart", "startup|clear", SESSION_START):
+        changed = True
+        print(f"+ SessionStart hook in {settings_path}")
+    hub_settings_path = hub.root / ".claude" / "settings.json"
+    hub_settings = load_json(hub_settings_path)
+    if hub_settings_path != settings_path and remove_hooks(hub_settings, "SessionStart", is_theflows_session_start):
+        save_json(hub_settings_path, hub_settings)
+        print(f"- SessionStart hook in {hub_settings_path} (now in {settings_path})")
     own = settings.get("statusLine")
     if not own:
         settings["statusLine"] = STATUSLINE
@@ -174,8 +206,11 @@ def doctor(args):
               "then theflow install)")
     else:
         print("--  no status line (theflow install sets theflow's)")
-    check(has_hook(load_json(root / ".claude" / "settings.json"), "SessionStart", SESSION_START),
-          "SessionStart hook in the hub", f"theflow init {root}")
+    check(has_hook(settings, "SessionStart", SESSION_START), "SessionStart hook (the hub welcome)", "theflow install")
+    hub_settings = root / ".claude" / "settings.json"
+    check(hub_settings == home / "settings.json"
+          or not remove_hooks(load_json(hub_settings), "SessionStart", is_theflows_session_start),
+          f"no SessionStart hook left in {hub_settings} (the hub root would greet twice)", "theflow install")
     claude_md = root / "CLAUDE.md"
     imports = {f"@{FLOW}/HUB.md"} | ({f"@~/{FLOW.relative_to(Path.home())}/HUB.md"}
                                       if FLOW.is_relative_to(Path.home()) else set())

@@ -21,22 +21,28 @@ Three kinds, all dispatched from a hub session:
 - **Review item** (`kind: review`, `/review`): a GitHub PR checked out **detached** in `work/<base>/review-<n>`; its
   Claude drafts a review in your voice and posts it when you say so.
 
-## Hub sessions (every session opened in the hub root)
+## Hub sessions (every session in the hub root or in the first tab of a base workspace)
 
 Every Claude session whose working directory is the hub root is a **hub session**: it only orchestrates,
 dispatching each piece of work to an item and wrapping items up, and never does an item's work itself.
-The SessionStart hook names its herdr tab `hub:<random slug>` (unless the user named the tab) and gives the session
-the tab's name as its title, so several hubs are told apart.
+Inside herdr, so is a session in the **first tab of a base workspace** (`base:<name>`) whose working directory is the
+base's folder: a request there that names no base is for that base. A linked base's folder loads its own `CLAUDE.md`,
+not the hub's, so the SessionStart hook points such a session at these rules; the base's `CLAUDE.md` is for the item
+sessions of that base. Every other session in a base (talk tabs, later tabs) and every session outside herdr in a
+base folder is not a hub session.
+The SessionStart hook (in the hub's Claude home: `theflow install` registers it) names the herdr tab
+`hub:<random slug>` in the hub root, `hub:<base>` in a base's first tab (unless the user named the tab), and gives the
+session the tab's name as its title, so several hubs are told apart.
 
 ### Welcome
 
-In the hub root (not in `work/<base>/<ITEM-ID>`), your **first reply of the session must start with the welcome
-below**, whatever the user's first message is. Fill the bases from `ls bases` and the Active lines from
-`theflow status` (the SessionStart hook passes its output; outside herdr use `ls work/*`): blocked agents first, one
-short line each, e.g. `retry-sync (blocked)`, items flagged as idle with their days, and the count against the WIP
-limit from the status's last line. If the status has `closed` lines (items wrapped up since the last hub session,
-from `items/inbox.md`), add one `Closed:` line with them, and name any closing that left something behind. Keep it
-this short; do not add anything else before it. The examples use the hub's own bases.
+In a hub session (the hub root or a base workspace's first tab, never `work/<base>/<ITEM-ID>`), your **first reply of
+the session must start with the welcome below**, whatever the user's first message is. Fill the bases from `ls bases`
+and the Active lines from `theflow status` (the SessionStart hook passes its output; outside herdr use `ls work/*`):
+blocked agents first, one short line each, e.g. `retry-sync (blocked)`, items flagged as idle with their days, and the
+count against the WIP limit from the status's last line. If the status has `closed` lines (items wrapped up since the
+last hub session, from `items/inbox.md`), add one `Closed:` line with them, and name any closing that left something
+behind. Keep it this short; do not add anything else before it. The examples use the hub's own bases.
 
 After the welcome, run the `work-on` skill: it reads the request as `<what> on <base>`, asks only for what is
 missing, then sets the item up.
@@ -239,8 +245,8 @@ The herdr sidebar mirrors the hub:
 
 ```
 work-hub                    ← hub workspace (cwd: the hub root): hub sessions only, tabs hub:<slug>
-base:api                    ← base workspace (cwd bases/api); each talk item adds a tab here,
-                              named talk:<short name> (agent <short name>)
+base:api                    ← base workspace (cwd bases/api); its first tab hub:api is a hub session too;
+                              each talk item adds a tab here, named talk:<short name> (agent <short name>)
   retry-sync                ← worktree workspace nested under its base, main tab work:retry-sync, agent retry-sync
 base:notes
 ```
@@ -252,17 +258,19 @@ base:notes
 - a **talk item's tab** is `talk:<short name>`: a tab of its own, never a split. A talk agent found sharing a tab
   with other panes (a session started next to a shell, then adopted) is moved into a new tab by `theflow sync`
   once it is idle, still running;
-- a **hub tab** is `hub:<random slug>` until the user names it otherwise.
+- a **hub tab** is `hub:<random slug>` in the hub workspace, and `hub:<base>` for a base workspace's first tab with a
+  Claude in it, until the user names it otherwise.
 
 The short name is the note's `label` and also the agent's name (herdr names match `[a-z][a-z0-9_-]{0,31}`), so it
 must be unique among active items: for a multi-base item, add the base to all but one (`export-csv`,
 `export-csv-web`). Labels are display only: workspaces are found by path, never by label. `theflow sync` puts every
-name above back on each run; a tab the user named keeps its name.
+name above back on each run, except `hub:<base>`, which the SessionStart hook gives a base's first tab when its hub
+session starts; a tab the user named keeps its name.
 
-An item's Claude **session** carries the name of its tab, `work:<short name>` or `talk:<short name>`, in
-Claude's prompt box, `/resume` and the Remote Control list: `theflow sync` passes `--name` when it starts or resumes
-it, and sends `/rename` to a running one with another name (no model turn, only while its agent is idle). A name
-the user gave the session (one without a `work:`, `talk:` or `hub:` prefix) is kept. Hub sessions keep `hub:<slug>`.
+An item's Claude **session** carries the name of its tab, `work:<short name>` or `talk:<short name>`, in Claude's prompt
+box, `/resume` and the Remote Control list: `theflow sync` passes `--name` when it starts or resumes it, and sends
+`/rename` to a running one with another name (no model turn, only while its agent is idle). A name the user gave the
+session (one without a `work:`, `talk:` or `hub:` prefix) is kept. Hub sessions keep `hub:<slug>` (or `hub:<base>`).
 
 - `theflow open` starts or attaches herdr (the hub's `herdr_session`), then runs `theflow sync` (with `--resume`
   when it had to start the server, so every item's Claude comes back after a reboot).
@@ -273,7 +281,8 @@ the user gave the session (one without a `work:`, `talk:` or `hub:` prefix) is k
 - `theflow status` changes nothing: every item with its agent state (blocked first), agents no item claims (with
   their session id), items stuck in `status: wrapping`, extra workspaces rooted at a base (left over: close them),
   then the closings not yet shown to a hub session.
-- A base workspace is for looking around and for talk items. The hub workspace is for hub sessions only.
+- A base workspace is for looking around, for talk items, and in its first tab for a hub session for that base. The
+  hub workspace is for hub sessions only.
 
 ## herdr automation
 
