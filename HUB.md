@@ -211,13 +211,15 @@ yours), keep what is decided under `## Notes` in that note.
   removing worktrees. A PreToolUse hook (`theflow hook protect-bases`, registered by `theflow install`) enforces
   this in every Claude session; if it blocks something legitimate, change its allowlist rather than working around
   it.
-- Before creating a new worktree, sync it:
-  ```bash
-  B=bases/<base>; D=$(git -C $B symbolic-ref --short refs/remotes/origin/HEAD | sed 's#origin/##')
-  git -C $B fetch --prune origin && git -C $B checkout $D && git -C $B reset --hard origin/$D && git -C $B clean -fd
-  ```
-- A **linked** base is your own checkout: only `git fetch --prune origin` before a new worktree, never a reset,
-  checkout or clean. Worktrees start from `origin/<default>` (or the local default branch when there is no origin).
+- The hub pulls a base's default branch from its remote before creating a new worktree: `theflow pull <base>`. An
+  owned base is reset to `origin/<default>` (fetch, checkout, `reset --hard`, clean).
+- A **linked** base is your own checkout: `theflow pull` only fast-forwards its default branch from origin (`merge
+  --ff-only` when it is checked out, which keeps your uncommitted changes), never a reset, rebase, stash, checkout or
+  clean. When it cannot (the branch and origin diverged, or your changes are in the way), it stops and says so, and
+  the hub asks you. Worktrees start from the local default branch, so they hold origin's commits and those a `merge:
+  local` wrap-up landed but nobody pushed yet (a base whose items land as PRs starts from `origin/<default>` when it
+  has commits origin lacks, so they stay out of the PR). An owned base opened with `writable: true` is treated the
+  same way: fast-forwarded, never reset.
 - New base: clone it into `bases/<name>` (owned) or `ln -s <folder> bases/<name>` (linked). `theflow sync` opens
   its `base:<name>` workspace; add an entry to `flow.json` only for the options above.
 

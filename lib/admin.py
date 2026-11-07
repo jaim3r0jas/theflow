@@ -256,6 +256,14 @@ def main():
         hub = Hub()
         repo = hub.github_repo(args[0]) if args else None
         print(repo) if repo else sys.exit(f"{args[0] if args else '?'}: no GitHub origin")
+    elif cmd == "pull":   # theflow pull <base>: its default branch up to date with origin, before a new worktree
+        hub = Hub()
+        if not args or not (hub.bases / args[0]).exists():
+            sys.exit(f"usage: theflow pull <base> (one of: {', '.join(hub.base_names())})")
+        ok, msg, start = hub.pull(args[0])
+        if not ok:
+            sys.exit(msg)
+        print(msg + (f"\nstart {start}" if start else ""))
     elif cmd == "trust":  # theflow trust <dir>: accept Claude's folder trust for it ahead of time
         trusted = Hub().trust(Path(args[0] if args else ".").absolute())
         print(f"trusted {trusted}" if trusted else "already trusted (or no Claude config yet)")

@@ -96,7 +96,9 @@ characters, unique among active items: `rv-retry-limit`. State the plan in one l
 
 ## 4. Create the worktree
 
-Prepare the base as in `work-on` step 5 (owned: sync; linked: fetch only). Then fetch the PR head through the
+Prepare the base with `theflow pull <base>`, as in `work-on` step 5. A review reads only origin's refs (the diffs below
+are against origin, as GitHub shows them), so when the pull fails, mention what it said and go on. Then fetch the PR
+head through the
 `pull/<n>/head` ref (works for forks too) and add a detached worktree:
 
 ```bash

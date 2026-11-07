@@ -435,20 +435,13 @@ class Item:
                 left.append(f"origin/{br} kept (not merged through a PR; --delete-remote removes it)")
 
     def resync(self, log, left):
-        """A base the hub owns goes back to origin/<default>; a linked base is your own checkout: only fetched."""
-        b, d = str(self.b), self.default
-        owned = not self.hub.is_linked(self.repo)
-        steps = [("fetch", "--prune", "-q", "origin")]
-        if owned:
-            steps += [("checkout", "-q", d), ("reset", "-q", "--hard", f"origin/{d}"), ("clean", "-fdq")]
-        if not out("git", "-C", b, "remote"):
+        """A base the hub owns goes back to origin/<default>; a linked base is your own checkout: its default branch
+        is only fast-forwarded. One that cannot be (diverged, local changes in the way) is said, not left over: it
+        holds nothing of the item's."""
+        if "origin" not in out("git", "-C", str(self.b), "remote").split():
             return
-        for step in steps:
-            rc, _, err = sh("git", "-C", b, *step)
-            if rc != 0:
-                left.append(f"base {self.repo} not resynced ({step[0]}): {err[:120]}")
-                return
-        log.append(f"base {self.repo} resynced to origin/{d}" if owned else f"base {self.repo} fetched")
+        ok, msg, _ = self.hub.pull(self.repo)
+        (log if ok or self.hub.is_linked(self.repo) or self.hub.writable(self.repo) else left).append(f"base {msg}")
 
     def verify(self, inv):
         left = []

@@ -122,7 +122,7 @@ base to all but one (`export-csv`, `export-csv-web`).
 Then state the plan in one line and go on unless the user objects:
 
 ```
-ABC-123 on api → work/api/ABC-123, branch feat/ABC-123/retry-sync (from origin/main), herdr retry-sync, agent retry-sync
+ABC-123 on api → work/api/ABC-123, branch feat/ABC-123/retry-sync (from main), herdr retry-sync, agent retry-sync
 budget question on notes → talk: a tab talk:budget-q in base:notes (cwd bases/notes, writable), agent budget-q
 ```
 
@@ -131,17 +131,20 @@ Over the WIP limit (step 1), add: `That makes 8 active items (limit 6). Idle a w
 
 ## 5. Create the item
 
-Prepare each base first. **Owned** base (never edit or commit in it):
+Prepare each base first: the hub pulls the base's default branch `$D` from origin before every new worktree.
 
 ```bash
-B=bases/<base>; D=$(git -C $B symbolic-ref --short refs/remotes/origin/HEAD | sed 's#origin/##')
-git -C $B fetch --prune origin && git -C $B checkout $D && git -C $B reset --hard origin/$D && git -C $B clean -fd
+theflow pull <base>   # owned: reset to origin/<default>. Linked (the user's checkout): the default branch only
+                      # fast-forwarded from origin, keeping the user's uncommitted changes and unpushed commits
 ```
 
-**Linked** git base: `git -C bases/<base> fetch --prune origin` only (it is the user's checkout: never reset, check
-out or clean it). Start from `origin/$D`; without an origin, from the local default branch.
+It prints what it did, then `start <ref>`: the ref a new branch starts from, usually the local default branch (it
+holds origin's commits and those a `merge: local` wrap-up landed), `origin/<default>` when a base whose items land
+as PRs has local commits not on origin. When it fails (the local default branch and origin diverged, or the user's
+changes are in the way), **stop** and tell the user what it said: never rebase, reset, stash or check out anything in
+a linked base to get past it.
 
-Then the worktree. `<start>` is `origin/$D`, the local default branch, or a stacked PR's `origin/<branch>`:
+Then the worktree. `<start>` is the ref `theflow pull` printed, or a stacked PR's `origin/<branch>`:
 
 ```bash
 git -C bases/<base> worktree add -b <branch> "$PWD/work/<base>/<ITEM-ID>" <start>    # new branch

@@ -35,7 +35,7 @@ base:web
 | | |
 |---|---|
 | **hub** | a folder with `flow.json`, `bases/`, `work/`, `items/` and a `CLAUDE.md` that imports [HUB.md](HUB.md) |
-| **base** | a repo or folder the work happens in: a git clone the hub owns (`bases/api`, read-only, reset to origin before each item), or a symlink to a folder of yours (`bases/notes -> ~/notes`, never reset, writable; without git it takes talk items only) |
+| **base** | a repo or folder the work happens in: a git clone the hub owns (`bases/api`, read-only, reset to origin before each item), or a symlink to a folder of yours (`bases/notes -> ~/notes`, never reset, only its default branch fast-forwarded from origin before each item, writable; without git it takes talk items only) |
 | **code item** | a git worktree `work/<base>/<ID>` on its own branch, its own herdr workspace and Claude session; lands as a GitHub PR, or (`merge: local`) fast-forwarded into the base's checkout on wrap-up |
 | **talk item** | no worktree: investigating, planning, triage, work in other tools. Its Claude runs in a tab of its own in the base's workspace |
 | **review item** | a GitHub PR checked out detached; its Claude drafts a review in your voice, you edit, it posts on "post" |
@@ -92,6 +92,7 @@ theflow status                             items with agent state, idle and stuc
 theflow teardown --check|--run|--detach B/ID [--merge] [--discard] [--cancelled] ...
 theflow scan <path>                        herdr workspaces, compose projects and processes of a worktree
 theflow gh-check [dir]                     gh installed (a repo's pinned version too) and logged in
+theflow pull <base>                        its default branch up to date with origin, before a new worktree
 theflow repo <base> | trust <dir>
 theflow review-corpus <out.jsonl>          your past review comments, to learn your review style
 ```

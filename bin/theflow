@@ -18,6 +18,7 @@ theflow <command> [args]          (run inside a hub: a folder with flow.json, or
   scan <path> [herdr|compose|proc]               what runs from a worktree
   gh-check [dir]                  gh installed and logged in there
   repo <base>                     owner/repo of a base's GitHub origin
+  pull <base>                     its default branch up to date with origin (fast-forward only when linked)
   trust <dir>                     accept Claude's folder trust for a folder ahead of time
   root                            the hub's folder
   hook session-start|protect-bases              the Claude hooks
@@ -27,7 +28,7 @@ USAGE
 
 cmd=${1:-help}; [ $# -gt 0 ] && shift
 case $cmd in
-  init|install|doctor|root|env|repo|trust) exec python3 "$LIB/admin.py" "$cmd" "$@" ;;
+  init|install|doctor|root|env|repo|pull|trust) exec python3 "$LIB/admin.py" "$cmd" "$@" ;;
   open) exec "$LIB/open.sh" "$@" ;;
   sync) exec python3 "$LIB/sync.py" "$@" ;;
   status) exec python3 "$LIB/sync.py" --status "$@" ;;

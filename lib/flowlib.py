@@ -119,8 +119,64 @@ class Hub:
         return hit.group(1) if hit else None
 
     def default_branch(self, name):
-        d = out("git", "-C", str(self.base_path(name)), "symbolic-ref", "--short", "refs/remotes/origin/HEAD")
-        return d.removeprefix("origin/") or "main"
+        """origin's HEAD (`pull` sets it when missing), else a local main or master, else "main"."""
+        b = str(self.base_path(name))
+        d = out("git", "-C", b, "symbolic-ref", "--short", "refs/remotes/origin/HEAD").removeprefix("origin/")
+        if d:
+            return d
+        return next((d for d in ("main", "master")
+                     if sh("git", "-C", b, "show-ref", "-q", "--verify", f"refs/heads/{d}")[0] == 0), "main")
+
+    def pull(self, name):
+        """Bring a base's default branch up to date with origin, before a worktree is cut from it: (ok, message,
+        start), start being the ref a new worktree starts from (None when not ok). An owned base is reset to
+        origin/<default>. A linked or writable one is yours: its default branch is only fast-forwarded (when checked
+        out, by merge --ff-only, which keeps uncommitted changes that don't overlap), never rebased, reset or
+        stashed; diverged or blocked, it stays as it is and ok is False. Local commits not on origin go into new
+        worktrees only where items land locally (merge: local); a PR starts from origin."""
+        if not self.is_git(name):
+            return True, f"{name}: not git, nothing to pull", None
+        b = str(self.base_path(name))
+        git = lambda *args: sh("git", "-C", b, *args)
+        if "origin" not in out("git", "-C", b, "remote").split():
+            d = self.default_branch(name)
+            return True, f"{name}: no origin, start from the local {d}", d
+        rc, _, err = git("fetch", "--prune", "-q", "origin")
+        if rc:
+            return False, f"{name}: fetch from origin failed: {err[:200]}", None
+        if git("symbolic-ref", "-q", "refs/remotes/origin/HEAD")[0]:
+            git("remote", "set-head", "origin", "--auto")
+        d = self.default_branch(name)
+        if not self.is_linked(name) and not self.writable(name):
+            for step in (("checkout", "-q", d), ("reset", "-q", "--hard", f"origin/{d}"), ("clean", "-fdq")):
+                rc, _, err = git(*step)
+                if rc:
+                    return False, f"{name}: not reset to origin/{d} ({step[0]}): {err[:200]}", None
+            return True, f"{name}: {d} reset to origin/{d}", d
+        if git("rev-parse", "-q", "--verify", f"refs/remotes/origin/{d}")[0]:
+            return True, f"{name}: origin has no {d}, start from the local {d}", d
+        counts = out("git", "-C", b, "rev-list", "--left-right", "--count", f"refs/heads/{d}...origin/{d}").split()
+        if len(counts) != 2:
+            return True, f"{name}: no local {d}, start from origin/{d}", f"origin/{d}"
+        ahead, behind = map(int, counts)
+        if ahead and behind:
+            return False, (f"{name}: {d} and origin/{d} have diverged ({ahead} local, {behind} on origin): "
+                           f"rebase or merge {d} yourself, then try again"), None
+        if behind:
+            if out("git", "-C", b, "branch", "--show-current") == d:
+                rc, _, err = git("merge", "--ff-only", "-q", f"origin/{d}")
+            else:   # a local fetch only fast-forwards, and refuses a branch checked out in another worktree
+                rc, _, err = git("fetch", "-q", ".", f"refs/remotes/origin/{d}:refs/heads/{d}")
+            if rc:
+                return False, f"{name}: {d} not fast-forwarded to origin/{d} ({behind} behind): {err[:200]}", None
+            return True, f"{name}: {d} fast-forwarded {behind} commit(s) from origin/{d}", d
+        if not ahead:
+            return True, f"{name}: {d} is up to date with origin/{d}", d
+        local = f"{name}: {d} is up to date with origin/{d} ({ahead} local commit(s) not on origin, pushed only " \
+                "when you say)"
+        if self.merge_mode(name) == "local":
+            return True, local, d
+        return True, f"{local}; items here land as PRs, so start from origin/{d}", f"origin/{d}"
 
     def base_names(self):
         return sorted(p.name for p in self.bases.iterdir() if p.is_dir() and not p.name.startswith(".")) \

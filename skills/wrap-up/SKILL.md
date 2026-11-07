@@ -185,7 +185,9 @@ the agent is working or blocked (other than the self-mode session), or the note 
    `items/<base>/drafts/review-<n>.md` is deleted.
 7. Remote branches, never for a review item: deleted when the PR is merged (or `--delete-remote`) and no open PR is
    stacked on them; `--close-pr` closes the open PR with `--delete-branch`. Others are kept and reported.
-8. The base: an owned one is reset to `origin/<default>`; a linked one is only fetched.
+8. The base, by `theflow pull`: an owned one is reset to `origin/<default>`; a linked one's default branch is only
+   fast-forwarded from origin, and one that cannot be (diverged, local changes in the way) is a line in the log, not
+   something left behind.
 9. Verifies that nothing is left and reports: a `Teardown ...` line in the note, `status: done|cancelled` and the
    note moved to `items/<base>/done/`; an entry in `items/inbox.md`; an FYI prompt to the session that opened the
    item when it is alive, idle and not the one running this; a herdr notification. A failed teardown keeps the note
